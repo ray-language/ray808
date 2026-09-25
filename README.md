@@ -107,15 +107,18 @@ ray run                     # la build embebida (npm --prefix frontend run build
 
 ```bash
 ray bundle                                   # macOS: Ray808.app (icono y About del [app])
-ray bundle --ios --ios-target sim            # proyecto Xcode en Ray808-ios/
+ray bundle --ios                             # proyecto Xcode en Ray808-ios/ (iPhone + simulador)
 (cd Ray808-ios && xcodebuild -project Ray808.xcodeproj -target Ray808 \
    -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO)
 ray bundle --android --android-abi arm64     # proyecto Gradle en Ray808-android/
 (cd Ray808-android && gradle assembleDebug)  # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Los proyectos generados no se versionan: se regeneran con `ray bundle`. Para un iPhone real,
-declara el equipo de firma con `[ios] development_team` en `ray.toml`. El icono sale de
+Los proyectos generados no se versionan: se regeneran con `ray bundle`. `--ios-target sim`
+acelera la iteración en el simulador, pero deja el proyecto **sin la librería de dispositivo**
+(`libs/libray_app.a`): compilar para un iPhone desde Xcode falla con «Library 'ray_app' not
+found» hasta regenerar con `ray bundle --ios` (ambos destinos, el valor por defecto). Para un
+iPhone real, declara el equipo de firma con `[ios] development_team` en `ray.toml`. El icono sale de
 `assets/icon.png` (`node frontend/scripts/make-icon.mjs` lo regenera).
 
 ## Estado
