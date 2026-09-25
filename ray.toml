@@ -1,0 +1,22 @@
+[package]
+name = "ray808"
+version = "0.1.0"
+
+[dependencies]
+web = "^0.4.4"
+net = "^0.3.5"
+
+# The web frontend (Vite + React). `ray dev` runs `dev` and points app:// at `url`;
+# `ray build --native` / `ray bundle` run `build` and embed `dist`.
+[frontend]
+dev = "npm --prefix frontend run dev -- --strictPort --port 5173 --clearScreen false"
+url = "http://localhost:5173"
+build = "npm --prefix frontend run build"
+dist = "frontend/dist"
+
+# `ray bundle` (macOS/Linux/Windows) and `ray bundle --ios` / `--android`.
+[app]
+name = "Ray808"
+id = "org.raylang.ray808"
+icon = "assets/icon.png"
+copyright = "© 2026 Rayala · 808 samples by Michael Fischer (1994)"

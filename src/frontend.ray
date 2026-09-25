@@ -1,0 +1,37 @@
+// The local HTTP server that feeds the window its page (the Vite build in frontend/dist,
+// embedded in the binary by `ray build --native` / `ray bundle`). It only serves static
+// files: all data goes over the std/ui IPC bridge.
+//
+// Why a server at all, when desktop `std/ui` can load `ray://app/…` with no port: the
+// iOS and Android shells of `ray bundle` load the URL they are given as is, and do not
+// answer the ray:// scheme. One path for every platform keeps the app the same program
+// everywhere. The server is locked to this app's window with `web.listen_local`: a fresh
+// 128-bit token per launch (`?ray_token=` on the first load, then a cookie), and a
+// cross-site guard, so no other process or web page on the device can reach it.
+
+import web/framework as web;
+import net/webserver;
+import std/net;
+
+/// The embedded frontend at `/`.
+pub fn build() -> web.App {
+    let app = web.new_app();
+    web.static_embedded(app, "/", "frontend/dist");
+    app
+}
+
+/// Binds an ephemeral loopback port, serves the frontend on it (in its own fiber) locked
+/// to `token`, and returns the URL the window must open.
+pub fn start(token: string) -> Result<string, string> {
+    let listener = net.tcp_listen("127.0.0.1", 0)?;
+    let port = net.local_port(listener);
+    let _server = spawn(fn() {
+        let _r = web.listen_local(build, listener, token);
+    });
+    Result.Ok("http://127.0.0.1:${port}/index.html?ray_token=${token}")
+}
+
+/// A fresh per-launch token for `start`.
+pub fn new_token() -> string {
+    webserver.local_token()
+}

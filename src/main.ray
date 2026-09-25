@@ -1,0 +1,112 @@
+// Ray808 — a TR-808 rhythm composer: a React page (frontend/) that plays the real 808
+// samples with Web Audio, and this raylang program that owns the window, the files and
+// the native dialogs. The same source runs as a desktop app and, through `ray bundle
+// --ios` / `--android`, as a phone app.
+//
+// Under `ray dev` the window loads the Vite dev server (hot reload); everywhere else it
+// loads the embedded build from the local server in frontend.ray. The page talks to
+// this program only through `window.ray.request({op, …})` (api.ray).
+
+import std/ui;
+import api;
+import store;
+import frontend;
+
+const APP_NAME: string = "Ray808";
+
+const APP_VERSION: string = "0.1.0";
+
+fn is_mobile() -> bool {
+    let p = platform();
+    p == "ios" || p == "android"
+}
+
+fn save_dialog(suggested: string, ext: string) -> Result<Option<string>, string> {
+    var o = ui.file_options();
+    o.title = "Export";
+    o.suggested = suggested;
+    if (ext.len() > 0) {
+        o.filters = [ui.filter(ext.to_upper(), [ext])];
+    }
+    ui.save_file_with(o)
+}
+
+fn open_dialog(ext: string) -> Result<Option<string>, string> {
+    var o = ui.file_options();
+    o.title = "Load patterns";
+    o.filters = [ui.filter(ext.to_upper(), [ext])];
+    ui.pick_file_with(o)
+}
+
+fn desktop_dialogs() -> api.Dialogs {
+    api.Dialogs { available: true, save: save_dialog, open: open_dialog }
+}
+
+fn install_menus() -> unit {
+    let _a = ui.set_about(
+        APP_NAME,
+        APP_VERSION,
+        "TR-808 rhythm composer · real 808 samples by Michael Fischer (1994)",
+        "© 2026 Rayala · made with raylang"
+    );
+    let _m = ui.app_menu(APP_NAME, [ui.item("role:about", "About " + APP_NAME, "")]);
+}
+
+fn main() -> int {
+    let dir = store.default_dir();
+    let dialogs = if (is_mobile()) { api.no_dialogs() } else { desktop_dialogs() };
+
+    let url = match (frontend.start(frontend.new_token())) {
+        Result.Ok(u) => u,
+        Result.Err(e) => {
+            eprint("ray808: cannot start the local server: " + e);
+            return 1;
+        },
+    };
+    if (!is_mobile()) {
+        install_menus();
+    }
+    var o = ui.options(1280, 820);
+    o.min_width = 360;
+    o.min_height = 560;
+    o.autosave = "ray808.main";
+    o.titlebar_color = "#16161a";
+    // Under `ray dev`, app_url swaps the local server's origin for the Vite dev server's.
+    let window = match (ui.open_with(APP_NAME, ui.app_url(url), o)) {
+        Result.Ok(w) => w,
+        Result.Err(e) => {
+            eprint("ray808: " + e);
+            return 1;
+        },
+    };
+
+    while (true) {
+        let e = match (ui.next_event()) {
+            Result.Ok(e) => e,
+            Result.Err(err) => {
+                eprint("ray808: " + err);
+                return 1;
+            },
+        };
+        if (e.kind == "closed" && e.window == window) {
+            return 0;
+        }
+        if (e.kind == "message") {
+            match (ui.as_request(e)) {
+                Option.Some(req) => {
+                    // The iOS/Android shells deliver page messages with window 0 (they do
+                    // not know the program's handle), but ui.reply(0, …) finds no such
+                    // window and the page's Promise would never resolve: answer our one
+                    // window instead.
+                    let target = if (e.window == 0) { window } else { e.window };
+                    match (ui.reply(target, req.0, api.handle(dir, req.1, dialogs))) {
+                        Result.Err(err) => eprint("ray808: reply: " + err),
+                        Result.Ok(_) => { },
+                    }
+                },
+                Option.None => { },
+            }
+        }
+    }
+    0
+}

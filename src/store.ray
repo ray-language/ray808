@@ -1,0 +1,193 @@
+// Persistence for the drum machine, as plain files under one data directory:
+//
+//   <dir>/state.json             the whole machine state (patterns, knobs, tempo…), as the
+//                                page sends it — validated as JSON, stored verbatim
+//   <dir>/samples/<VOICE>.bin    a user sample's raw audio bytes (WAV/MP3/OGG as loaded)
+//   <dir>/samples/<VOICE>.name   its original file name, shown in the sample panel
+//   <dir>/exports/               where exports land when there is no save dialog (mobile)
+//
+// Every write goes to a temp file and is renamed into place, so a crash never leaves a
+// half-written state. Voice ids are checked against the fixed 808 set before they touch a
+// path: the page cannot name a file outside `samples/`.
+
+import std/fs;
+import std/json;
+
+/// The 16 voices of the TR-808 (the only names a sample file can take).
+const VOICES: [string] = ["BD", "SD", "LT", "LC", "MT", "MC", "HT", "HC", "RS", "CL", "CP", "MA", "CB", "CY", "OH", "CH"];
+
+/// Largest user sample accepted (bytes of the decoded upload).
+pub const MAX_SAMPLE_BYTES: int = 16777216;
+
+/// Where the app keeps its files. `$HOME/Documents/Ray808` works on macOS, Linux and
+/// iOS (whose container root is read-only, but `Documents/` is writable). The Android
+/// shell sets no HOME and runs with cwd=/, so there the app's private data directory is
+/// derived from its package name (the process's argv[0]).
+pub fn default_dir() -> string {
+    if (platform() == "android") {
+        match (android_package()) {
+            Option.Some(pkg) => return "/data/data/${pkg}/files/Ray808",
+            Option.None => { },
+        }
+    }
+    match (env("HOME")) {
+        Option.Some(h) => "${h}/Documents/Ray808",
+        Option.None => "./Ray808",
+    }
+}
+
+/// The Android package name: an app process's command line is its package id.
+fn android_package() -> Option<string> {
+    let raw = match (fs.read_file_bytes("/proc/self/cmdline")) {
+        Result.Ok(b) => b,
+        Result.Err(_) => return Option.None,
+    };
+    let end = raw.index_of(bytes_of([0])).unwrap_or(raw.len());
+    match (from_utf8(raw.sub_bytes(0, end))) {
+        Result.Ok(s) => {
+            let pkg = s.split(":")[0].trim();  // "org.x.app:service" → "org.x.app"
+            if (pkg.len() == 0 || pkg.contains("/")) { Option.None } else { Option.Some(pkg) }
+        },
+        Result.Err(_) => Option.None,
+    }
+}
+
+pub fn is_voice(id: string) -> bool {
+    VOICES.contains(id)
+}
+
+fn samples_dir(dir: string) -> string {
+    "${dir}/samples"
+}
+
+pub fn exports_dir(dir: string) -> string {
+    "${dir}/exports"
+}
+
+fn write_atomic(path: string, text: string) -> Result<int, string> {
+    let tmp = path + ".tmp";
+    fs.write_file(tmp, text)?;
+    fs.rename(tmp, path)
+}
+
+fn write_atomic_bytes(path: string, data: bytes) -> Result<int, string> {
+    let tmp = path + ".tmp";
+    fs.write_file_bytes(tmp, data)?;
+    fs.rename(tmp, path)
+}
+
+/// The saved state, or None when there is none yet (first launch) or it is unreadable.
+pub fn load_state(dir: string) -> Option<string> {
+    match (fs.read_file("${dir}/state.json")) {
+        Result.Ok(text) => {
+            match (json.parse(text)) {
+                Result.Ok(_) => Option.Some(text),
+                Result.Err(_) => Option.None,
+            }
+        },
+        Result.Err(_) => Option.None,
+    }
+}
+
+/// Saves the state after checking it is a JSON object with patterns.
+pub fn save_state(dir: string, text: string) -> Result<int, string> {
+    let parsed = json.parse(text)?;
+    match (json.member(parsed, "patterns")) {
+        Option.Some(_) => { },
+        Option.None => return Result.Err("state without patterns"),
+    }
+    fs.mkdir(dir)?;
+    write_atomic("${dir}/state.json", text)
+}
+
+pub fn clear_state(dir: string) -> Result<int, string> {
+    let path = "${dir}/state.json";
+    if (fs.exists(path)) {
+        return fs.remove_file(path);
+    }
+    Result.Ok(0)
+}
+
+/// A file name safe to show and to reuse: no path separators or control characters,
+/// at most 120 characters.
+pub fn clean_name(name: string) -> string {
+    var out = "";
+    for c in name.chars() {
+        if (c == '/' || c == '\\' || char_code(c) < 32) {
+            out = out + "_";
+        } else {
+            out = out + to_string(c);
+        }
+    }
+    let trimmed = out.trim();
+    if (trimmed.len() == 0) {
+        return "sample";
+    }
+    trimmed.substring(0, 120)
+}
+
+pub fn put_sample(dir: string, voice: string, name: string, data: bytes) -> Result<int, string> {
+    if (!is_voice(voice)) {
+        return Result.Err("unknown voice: ${voice}");
+    }
+    if (data.len() == 0) {
+        return Result.Err("empty sample");
+    }
+    if (data.len() > MAX_SAMPLE_BYTES) {
+        return Result.Err("sample too large (max 16 MiB)");
+    }
+    let sd = samples_dir(dir);
+    fs.mkdir(sd)?;
+    write_atomic_bytes("${sd}/${voice}.bin", data)?;
+    write_atomic("${sd}/${voice}.name", clean_name(name))
+}
+
+/// The saved sample of a voice as (file name, bytes).
+pub fn get_sample(dir: string, voice: string) -> Option<(string, bytes)> {
+    if (!is_voice(voice)) {
+        return Option.None;
+    }
+    let sd = samples_dir(dir);
+    let data = match (fs.read_file_bytes("${sd}/${voice}.bin")) {
+        Result.Ok(b) => b,
+        Result.Err(_) => return Option.None,
+    };
+    let name = fs.read_file("${sd}/${voice}.name").unwrap_or(voice);
+    Option.Some((name, data))
+}
+
+pub fn delete_sample(dir: string, voice: string) -> Result<int, string> {
+    if (!is_voice(voice)) {
+        return Result.Err("unknown voice: ${voice}");
+    }
+    let sd = samples_dir(dir);
+    for ext in [".bin", ".name"] {
+        let p = "${sd}/${voice}${ext}";
+        if (fs.exists(p)) {
+            fs.remove_file(p)?;
+        }
+    }
+    Result.Ok(0)
+}
+
+/// The voices that have a user sample, with their file names, in the 808's order.
+pub fn list_samples(dir: string) -> [(string, string)] {
+    var out: [(string, string)] = [];
+    let sd = samples_dir(dir);
+    for v in VOICES {
+        if (fs.exists("${sd}/${v}.bin")) {
+            out.push((v, fs.read_file("${sd}/${v}.name").unwrap_or(v)));
+        }
+    }
+    out
+}
+
+/// Writes an export under `exports/` (the mobile path, where there is no save dialog)
+/// and returns its full path.
+pub fn write_export(dir: string, name: string, data: bytes) -> Result<string, string> {
+    let ed = exports_dir(dir);
+    fs.mkdir(ed)?;
+    let path = "${ed}/${clean_name(name)}";
+    write_atomic_bytes(path, data)?;
+    Result.Ok(path)
+}

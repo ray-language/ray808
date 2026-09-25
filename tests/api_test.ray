@@ -1,0 +1,186 @@
+import std/fs;
+import std/json;
+import std/base64;
+import api;
+import store;
+
+fn temp() -> string {
+    match (fs.make_temp_dir("ray808-test")) {
+        Result.Ok(d) => d,
+        Result.Err(e) => panic("temp dir: " + e),
+    }
+}
+
+fn reply(dir: string, body: string) -> json.Json {
+    match (json.parse(api.handle(dir, body, api.no_dialogs()))) {
+        Result.Ok(j) => j,
+        Result.Err(e) => panic("reply is not JSON: " + e),
+    }
+}
+
+fn is_ok(j: json.Json) -> bool {
+    json.get_bool(j, "ok").unwrap_or(false)
+}
+
+fn error_of(j: json.Json) -> string {
+    json.get_string(j, "error").unwrap_or("")
+}
+
+@test
+fn first_launch_has_no_state() {
+    let dir = temp();
+    let r = reply(dir, `{"op":"state.load"}`);
+    assert(is_ok(r));
+    match (json.member(r, "state")) {
+        Option.Some(s) => assert(json.is_null(s)),
+        Option.None => panic("no state field"),
+    }
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn state_round_trips_through_the_backend() {
+    let dir = temp();
+    let saved = reply(
+        dir,
+        `{"op":"state.save","state":{"tempo":133,"patterns":[{"A":{},"B":{}}]}}`
+    );
+    assert(is_ok(saved));
+    let loaded = reply(dir, `{"op":"state.load"}`);
+    match (json.member(loaded, "state")) {
+        Option.Some(s) => assert_eq(json.get_int(s, "tempo").unwrap_or(-1), 133),
+        Option.None => panic("no state field"),
+    }
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn a_state_without_patterns_is_refused() {
+    let dir = temp();
+    let r = reply(dir, `{"op":"state.save","state":{"tempo":90}}`);
+    assert(!is_ok(r));
+    assert_eq(error_of(r), "state without patterns");
+    assert(!fs.exists(dir + "/state.json"));
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn clearing_the_state_forgets_it() {
+    let dir = temp();
+    let _ = reply(dir, `{"op":"state.save","state":{"patterns":[]}}`);
+    assert(is_ok(reply(dir, `{"op":"state.clear"}`)));
+    assert(!fs.exists(dir + "/state.json"));
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn a_user_sample_survives_as_bytes_and_name() {
+    let dir = temp();
+    let data = bytes_of([82, 73, 70, 70, 0, 1, 2, 255]);
+    let put = reply(
+        dir,
+        `{"op":"sample.put","voice":"BD","name":"kick.wav","data":"${base64.base64(data)}"}`
+    );
+    assert(is_ok(put));
+    let got = reply(dir, `{"op":"sample.get","voice":"BD"}`);
+    assert_eq(json.get_string(got, "name").unwrap_or(""), "kick.wav");
+    match (base64.base64_decode(json.get_string(got, "data").unwrap_or(""))) {
+        Result.Ok(b) => assert_eq(b, data),
+        Result.Err(e) => panic(e),
+    }
+    let list = reply(dir, `{"op":"sample.list"}`);
+    match (json.get_array(list, "samples")) {
+        Option.Some(items) => {
+            assert_eq(items.len(), 1);
+            assert_eq(json.get_string(items[0], "voice").unwrap_or(""), "BD");
+        },
+        Option.None => panic("no samples field"),
+    }
+    assert(is_ok(reply(dir, `{"op":"sample.delete","voice":"BD"}`)));
+    assert(!is_ok(reply(dir, `{"op":"sample.get","voice":"BD"}`)));
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn a_voice_outside_the_808_cannot_name_a_file() {
+    let dir = temp();
+    let r = reply(dir, `{"op":"sample.put","voice":"../../evil","name":"x","data":"AAAA"}`);
+    assert(!is_ok(r));
+    assert_eq(error_of(r), "unknown voice: ../../evil");
+    assert(!fs.exists(dir + "/samples"));
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn without_dialogs_an_export_lands_in_exports() {
+    let dir = temp();
+    let data = bytes_of([1, 2, 3]);
+    let r = reply(dir, `{"op":"export","name":"../pt01.wav","data":"${base64.base64(data)}"}`);
+    assert(is_ok(r));
+    let path = json.get_string(r, "path").unwrap_or("");
+    assert_eq(path, store.exports_dir(dir) + "/.._pt01.wav");
+    match (fs.read_file_bytes(path)) {
+        Result.Ok(b) => assert_eq(b, data),
+        Result.Err(e) => panic(e),
+    }
+    let _ = fs.remove_all(dir);
+}
+
+fn cancel_save(suggested: string, ext: string) -> Result<Option<string>, string> {
+    Result.Ok(Option.None)
+}
+
+fn cancel_open(ext: string) -> Result<Option<string>, string> {
+    Result.Ok(Option.None)
+}
+
+@test
+fn a_cancelled_save_dialog_is_reported_as_such() {
+    let dir = temp();
+    let dialogs = api.Dialogs { available: true, save: cancel_save, open: cancel_open };
+    let r = json.parse(api.handle(dir, `{"op":"export","name":"a.wav","data":"AAAA"}`, dialogs));
+    match (r) {
+        Result.Ok(j) => {
+            assert(!is_ok(j));
+            assert(json.get_bool(j, "cancelled").unwrap_or(false));
+        },
+        Result.Err(e) => panic(e),
+    }
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn the_save_dialog_path_receives_the_bytes() {
+    let dir = temp();
+    let target = dir + "/chosen.json";
+    let pick = fn(s: string, e: string) -> Result<Option<string>, string> { Result.Ok(Option.Some(target)) };
+    let choose = fn(e: string) -> Result<Option<string>, string> { Result.Ok(Option.Some(target)) };
+    let dialogs = api.Dialogs { available: true, save: pick, open: choose };
+    let text = `{"patterns":[]}`;
+    let _ = api.handle(
+        dir,
+        `{"op":"export","name":"p.json","data":"${base64.base64(text.to_bytes())}"}`,
+        dialogs
+    );
+    assert_eq(fs.read_file(target).unwrap_or(""), text);
+    match (json.parse(api.handle(dir, `{"op":"import"}`, dialogs))) {
+        Result.Ok(j) => assert_eq(json.get_string(j, "text").unwrap_or(""), text),
+        Result.Err(e) => panic(e),
+    }
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn unknown_ops_and_bad_json_fail_cleanly() {
+    let dir = temp();
+    assert_eq(error_of(reply(dir, `{"op":"format.disk"}`)), "unknown op: format.disk");
+    assert(!is_ok(reply(dir, `not json`)));
+    let _ = fs.remove_all(dir);
+}
+
+@test
+fn names_are_cleaned_before_touching_the_disk() {
+    assert_eq(store.clean_name("a/b\\c.wav"), "a_b_c.wav");
+    assert_eq(store.clean_name("   "), "sample");
+    assert_eq(store.clean_name("x\u{1}y"), "x_y");
+}

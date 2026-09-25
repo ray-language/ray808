@@ -1,0 +1,187 @@
+// The page ↔ raylang protocol. The React frontend calls `window.ray.request({op, …})`;
+// the event loop hands the JSON body to `handle`, and the JSON string it returns
+// resolves the page's Promise. Every reply is an object with `ok`; failures carry
+// `error` (and `cancelled: true` when the user dismissed a dialog).
+//
+//   hello                              → platform, whether native file dialogs exist
+//   state.load / state.save / state.clear
+//   sample.list / sample.get / sample.put / sample.delete   (bytes travel as base64)
+//   export {name, data}                → save dialog on desktop; exports/ on mobile
+//   import                             → open dialog on desktop (JSON text back)
+//
+// The dialogs are passed in (`Dialogs`), so tests drive `handle` without a window.
+
+import std/json;
+import std/base64;
+import std/fs;
+import store;
+
+/// Native file dialogs, or none (mobile, where the page falls back to the browser).
+pub struct Dialogs {
+    available: bool,
+    // (suggested file name, extension) → chosen path, None if cancelled.
+    save: fn(string, string) -> Result<Option<string>, string>,
+    // (extension) → chosen path, None if cancelled.
+    open: fn(string) -> Result<Option<string>, string>,
+}
+
+fn no_save(suggested: string, ext: string) -> Result<Option<string>, string> {
+    Result.Err("no file dialogs on this platform")
+}
+
+fn no_open(ext: string) -> Result<Option<string>, string> {
+    Result.Err("no file dialogs on this platform")
+}
+
+/// Dialogs that do not exist (tests, mobile).
+pub fn no_dialogs() -> Dialogs {
+    Dialogs { available: false, save: no_save, open: no_open }
+}
+
+fn obj(fields: [(string, json.Json)]) -> json.Json {
+    let m: Map<string, json.Json> = Map.new();
+    for f in fields {
+        m.insert(f.0, f.1);
+    }
+    json.Json.JObject(m)
+}
+
+fn ok(fields: [(string, json.Json)]) -> string {
+    json.stringify(obj([("ok", json.Json.JBool(true))] + fields))
+}
+
+pub fn fail(msg: string) -> string {
+    json.stringify(obj([("ok", json.Json.JBool(false)), ("error", json.Json.JStr(msg))]))
+}
+
+fn cancelled() -> string {
+    json.stringify(
+        obj(
+            [
+                ("ok", json.Json.JBool(false)),
+                ("cancelled", json.Json.JBool(true)),
+                ("error", json.Json.JStr("cancelled"))
+            ]
+        )
+    )
+}
+
+fn str_field(req: json.Json, key: string) -> Result<string, string> {
+    match (json.get_string(req, key)) {
+        Option.Some(s) => Result.Ok(s),
+        Option.None => Result.Err("missing field '${key}'"),
+    }
+}
+
+fn b64_field(req: json.Json, key: string) -> Result<bytes, string> {
+    base64.base64_decode(str_field(req, key)?)
+}
+
+fn extension_of(name: string) -> string {
+    let parts = name.split(".");
+    if (parts.len() < 2) {
+        return "";
+    }
+    parts[parts.len() - 1].to_lower()
+}
+
+/// Handles one request body; always returns a JSON reply.
+pub fn handle(dir: string, body: string, dialogs: Dialogs) -> string {
+    match (dispatch(dir, body, dialogs)) {
+        Result.Ok(reply) => reply,
+        Result.Err(e) => fail(e),
+    }
+}
+
+fn dispatch(dir: string, body: string, dialogs: Dialogs) -> Result<string, string> {
+    let req = json.parse(body)?;
+    let op = str_field(req, "op")?;
+    if (op == "hello") {
+        return Result.Ok(
+            ok(
+                [
+                    ("platform", json.Json.JStr(platform())),
+                    ("dialogs", json.Json.JBool(dialogs.available)),
+                    ("dir", json.Json.JStr(dir))
+                ]
+            )
+        );
+    }
+    if (op == "state.load") {
+        let state = match (store.load_state(dir)) {
+            Option.Some(text) => json.parse(text)?,
+            Option.None => json.Json.JNull,
+        };
+        return Result.Ok(ok([("state", state)]));
+    }
+    if (op == "state.save") {
+        let state = match (json.member(req, "state")) {
+            Option.Some(s) => s,
+            Option.None => return Result.Err("missing field 'state'"),
+        };
+        store.save_state(dir, json.stringify(state))?;
+        return Result.Ok(ok([]));
+    }
+    if (op == "state.clear") {
+        store.clear_state(dir)?;
+        return Result.Ok(ok([]));
+    }
+    if (op == "sample.list") {
+        var items: [json.Json] = [];
+        for s in store.list_samples(dir) {
+            items.push(obj([("voice", json.Json.JStr(s.0)), ("name", json.Json.JStr(s.1))]));
+        }
+        return Result.Ok(ok([("samples", json.Json.JArray(items))]));
+    }
+    if (op == "sample.get") {
+        let voice = str_field(req, "voice")?;
+        return match (store.get_sample(dir, voice)) {
+            Option.Some(s) => Result.Ok(
+                ok(
+                    [
+                        ("voice", json.Json.JStr(voice)),
+                        ("name", json.Json.JStr(s.0)),
+                        ("data", json.Json.JStr(base64.base64(s.1)))
+                    ]
+                )
+            ),
+            Option.None => Result.Err("no sample for ${voice}"),
+        };
+    }
+    if (op == "sample.put") {
+        let voice = str_field(req, "voice")?;
+        let name = str_field(req, "name")?;
+        let data = b64_field(req, "data")?;
+        store.put_sample(dir, voice, name, data)?;
+        return Result.Ok(ok([]));
+    }
+    if (op == "sample.delete") {
+        store.delete_sample(dir, str_field(req, "voice")?)?;
+        return Result.Ok(ok([]));
+    }
+    if (op == "export") {
+        let name = store.clean_name(str_field(req, "name")?);
+        let data = b64_field(req, "data")?;
+        if (!dialogs.available) {
+            let path = store.write_export(dir, name, data)?;
+            return Result.Ok(ok([("path", json.Json.JStr(path))]));
+        }
+        return match (dialogs.save(name, extension_of(name))?) {
+            Option.None => Result.Ok(cancelled()),
+            Option.Some(path) => {
+                fs.write_file_bytes(path, data)?;
+                Result.Ok(ok([("path", json.Json.JStr(path))]))
+            },
+        };
+    }
+    if (op == "import") {
+        if (!dialogs.available) {
+            return Result.Err("no file dialogs on this platform");
+        }
+        return match (dialogs.open("json")?) {
+            Option.None => Result.Ok(cancelled()),
+            Option.Some(path) => Result.Ok(ok([("text", json.Json.JStr(fs.read_file(path)?))])),
+        };
+    }
+    Result.Err("unknown op: ${op}")
+}

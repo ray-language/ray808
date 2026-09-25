@@ -1,0 +1,223 @@
+/* ---------- Pieces shared by both layouts ---------- */
+.tempo-section,
+.pattern-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.strip__knobs .knob { touch-action: none; }
+
+/* Action sheet / confirmation (the mobile shells have no window.confirm) */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0 0 0 / 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
+}
+.sheet {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sheet__item {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 16px;
+  border-radius: 10px;
+  color: var(--silk);
+  background: linear-gradient(#2e2e35, #1d1d22);
+  border: 1px solid #000;
+}
+.sheet__item--cancel { color: var(--accent-orange); margin-top: 6px; }
+
+.confirm {
+  width: min(380px, 100%);
+  align-self: center;
+  margin-bottom: 30vh;
+  padding: 18px;
+  border-radius: 10px;
+  background: linear-gradient(#26262c, #18181c);
+  border: 1px solid var(--panel-line);
+  box-shadow: 0 20px 50px rgba(0 0 0 / 0.6);
+}
+.confirm p { font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
+.confirm__buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm__buttons .mini-btn { font-size: 11px; padding: 8px 14px; }
+
+/* ---------- Phone layout (≤ 760 px) ----------
+ * The desktop panel is 12 instrument columns wide; on a phone that is unusable. Here the
+ * machine is a column of cards in the order a thumb works: the display and START/STOP
+ * stay pinned at the top, the 16 steps come first (8 × 2, big targets), then a strip of
+ * instrument plates that scrolls sideways with the selected instrument's knobs below,
+ * and finally tempo and pattern memory. */
+
+body:has(.machine--phone) {
+  padding: 0;
+  background: var(--chassis);
+}
+
+.machine--phone {
+  width: 100%;
+  min-height: 100dvh;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) calc(10px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom))
+    calc(10px + env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: none;
+}
+.machine--phone::before,
+.machine--phone::after { display: none; }
+
+.machine--phone .brand {
+  flex-wrap: nowrap;
+  padding: 12px 2px 8px;
+  border-bottom-width: 1px;
+}
+.machine--phone .brand__left { gap: 8px; min-width: 0; }
+.machine--phone .brand__maker { font-size: 18px; }
+.machine--phone .brand__model { font-size: 11px; white-space: nowrap; }
+.machine--phone .brand__model em { font-size: 15px; }
+.machine--phone .brand__cc { display: none; }
+
+.menu-btn {
+  flex: 0 0 44px;
+  height: 36px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--silk);
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  background: linear-gradient(#2a2a30, #1c1c21);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  gap: 10px;
+  padding: 8px 0;
+  background: linear-gradient(var(--chassis) 85%, transparent);
+}
+.topbar .display { min-height: 0; padding: 8px 10px; }
+.topbar .display__bpm { font-size: 26px; }
+.topbar .transport__run { gap: 8px; }
+.topbar .start-btn { padding: 10px 6px; font-size: 11px; }
+.topbar .tap-btn { flex-basis: 52px; }
+
+.card {
+  border: 1px solid var(--panel-line);
+  border-radius: 10px;
+  padding: 10px 10px 14px;
+  background: linear-gradient(175deg, #1d1d22, #131316);
+}
+.card .section-label { font-size: 10px; margin-bottom: 10px; }
+
+/* Steps: 8 × 2, thumb-sized */
+.machine--phone .steps {
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px 6px;
+}
+.machine--phone .step { gap: 5px; }
+.machine--phone .step__btn {
+  max-width: none;
+  height: clamp(52px, 13vw, 72px);
+}
+.machine--phone .step__num { font-size: 9px; }
+
+/* Instrument plates as a sideways-scrolling strip */
+.chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 10px;
+  margin: 0 -10px 4px;
+  padding-left: 10px;
+  padding-right: 10px;
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: 0 0 auto; scroll-snap-align: start; }
+.chip .strip__plate {
+  width: 78px;
+  min-height: 54px;
+  border-radius: 6px;
+}
+.chip .strip__name { font-size: 9px; }
+.chip.strip--selected .strip__plate {
+  border-color: var(--accent-orange);
+  background: rgba(232 116 44 / 0.1);
+}
+
+/* The selected instrument's knobs, large */
+.strip--focus {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 0 2px;
+  border: none;
+}
+.strip--focus .strip__knobs {
+  flex-direction: row;
+  gap: 22px;
+  flex: none;
+}
+.strip--focus .knob__label { font-size: 10px; }
+.strip--focus .strip__switch { font-size: 10px; gap: 4px; padding: 6px; }
+.strip--focus .strip__switch-lever { width: 16px; height: 28px; }
+.strip--focus .strip__switch-lever::after { height: 11px; }
+.strip--focus .strip__switch-lever.down::after { transform: translateY(12px); }
+
+/* Tempo and patterns */
+.machine--phone .transport__tempo { gap: 22px; }
+.machine--phone .transport__minor { gap: 36px; margin-top: 4px; }
+.machine--phone .knob--m .knob__body { width: 50px; height: 50px; }
+.machine--phone .knob--s .knob__body { width: 38px; height: 38px; }
+.machine--phone .knob__label { font-size: 9px; }
+.machine--phone .variation__btn { font-size: 13px; padding: 12px 0; }
+.machine--phone .patterns__grid { gap: 6px; }
+.machine--phone .patterns__btn { font-size: 12px; padding: 12px 0; }
+.machine--phone .patterns__ops .mini-btn { font-size: 11px; padding: 10px 16px; }
+
+/* Sample bank: a full-screen sheet */
+.machine--phone .sample-panel {
+  width: 100%;
+  padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+}
+.machine--phone .sample-row { padding: 10px; }
+.machine--phone .sample-row .mini-btn { font-size: 10px; padding: 8px 10px; }
+.machine--phone .sample-row__play { width: 36px; height: 36px; flex-basis: 36px; font-size: 13px; }
+
+/* No hover on touch screens: no sticky hover highlights */
+@media (hover: none) {
+  .strip__plate:hover { background: transparent; border-color: var(--silk-dim); }
+  .toolbar button:hover { color: var(--silk-dim); border-color: var(--panel-line); }
+}
+
+/* Taps must not zoom or select text */
+button,
+.knob__body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.knob__body { touch-action: none; }
+
+/* The Android shell draws the WebView edge to edge but reports no safe-area insets:
+   leave room for the status bar and the gesture bar ourselves (App sets data-platform
+   from the backend's hello). */
+html[data-platform='android'] .machine--phone {
+  padding-top: 30px;
+  padding-bottom: 28px;
+}
+html[data-platform='android'] .sheet-backdrop { padding-bottom: 40px; }
+html[data-platform='android'] .machine--phone .sample-panel { padding-top: 40px; }

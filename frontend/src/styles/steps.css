@@ -1,0 +1,82 @@
+/* ---------- Fila de 16 step buttons ---------- */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 7px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.step__led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--led-off);
+  box-shadow: inset 0 1px 2px rgba(0 0 0 / 0.85);
+  transition: background 40ms;
+}
+
+.step--on .step__led {
+  background: var(--led-on);
+  box-shadow:
+    0 0 7px var(--led-on),
+    0 0 16px rgba(255 70 51 / 0.55);
+}
+
+/* LED corredizo: en pasos apagados luce tenue; en activos refuerza el brillo */
+.step--running .step__led {
+  background: #ff7a5e;
+  box-shadow: 0 0 9px #ff7a5e, 0 0 20px rgba(255 122 94 / 0.6);
+}
+.step--running.step--on .step__led {
+  background: #ffb29e;
+  box-shadow: 0 0 12px #ffb29e, 0 0 26px rgba(255 178 158 / 0.8);
+}
+
+.step__btn {
+  width: 100%;
+  max-width: 54px;
+  height: clamp(48px, 6vw, 78px);
+  border-radius: 4px;
+  border: 1px solid rgba(0 0 0 / 0.85);
+  box-shadow:
+    0 4px 0 rgba(0 0 0 / 0.55),
+    0 6px 8px rgba(0 0 0 / 0.45),
+    inset 0 2px 0 rgba(255 255 255 / 0.35),
+    inset 0 -3px 4px rgba(0 0 0 / 0.3);
+}
+.step__btn:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 rgba(0 0 0 / 0.55),
+    inset 0 2px 5px rgba(0 0 0 / 0.4);
+}
+
+.step--red    .step__btn { background: linear-gradient(178deg, #e05248 0%, var(--step-red) 55%, #a32d26 100%); }
+.step--orange .step__btn { background: linear-gradient(178deg, #f08a3e 0%, var(--step-orange) 55%, #b25a1c 100%); }
+.step--yellow .step__btn { background: linear-gradient(178deg, #f3ca52 0%, var(--step-yellow) 55%, #b88d20 100%); }
+.step--cream  .step__btn { background: linear-gradient(178deg, #f5efdf 0%, var(--step-cream) 55%, #bdb49a 100%); }
+
+.step__num {
+  font-size: 8px;
+  color: var(--silk-dim);
+  letter-spacing: 0.05em;
+}
+
+/* Marcas de negra (1, 5, 9, 13) */
+.step:nth-child(4n + 1) .step__num {
+  color: var(--silk);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .steps {
+    grid-template-columns: repeat(8, 1fr);
+    row-gap: 14px;
+  }
+}
