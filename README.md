@@ -120,8 +120,13 @@ ray bundle --android --android-abi arm64     # proyecto Gradle en Ray808-android
 Los proyectos generados no se versionan: se regeneran con `ray bundle`. `--ios-target sim`
 acelera la iteración en el simulador, pero deja el proyecto **sin la librería de dispositivo**
 (`libs/libray_app.a`): compilar para un iPhone desde Xcode falla con «Library 'ray_app' not
-found» hasta regenerar con `ray bundle --ios` (ambos destinos, el valor por defecto). Para un
-iPhone real, declara el equipo de firma con `[ios] development_team` en `ray.toml`. El icono sale de
+found» hasta regenerar con `ray bundle --ios` (ambos destinos, el valor por defecto).
+
+Para un iPhone real, pon tu equipo en `Ray808-ios/App.xcconfig` (`CODE_SIGN_STYLE = Automatic`
+y `DEVELOPMENT_TEAM = <tu Team ID>`), o en `[ios] development_team` del `ray.toml`: `ray bundle
+--ios` conserva ese archivo al regenerar. **No** lo elijas en la pestaña *Signing &
+Capabilities* de Xcode: Xcode lo guarda en `project.pbxproj`, que se regenera entero, y se
+pierde en el siguiente `ray bundle --ios`. El icono sale de
 `assets/icon.png` (`node frontend/scripts/make-icon.mjs` lo regenera).
 
 ## Estado
