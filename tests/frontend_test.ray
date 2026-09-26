@@ -19,6 +19,12 @@ fn dev_server_urls_parse_to_host_and_port() {
 }
 
 @test
+fn a_url_without_a_port_takes_the_scheme_default() {
+    assert_eq(frontend.host_port("http://mac.local"), Option.Some(("mac.local", 80)));
+    assert_eq(frontend.host_port("gopher://x"), Option.None);
+}
+
+@test
 fn a_dead_dev_server_is_not_reachable() {
     // Port 9 (discard) on loopback: nothing listens there on a dev machine or in CI.
     assert(!frontend.reachable("http://127.0.0.1:9/", 500));

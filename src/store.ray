@@ -20,36 +20,19 @@ const VOICES: [string] = ["BD", "SD", "LT", "LC", "MT", "MC", "HT", "HC", "RS", 
 pub const MAX_SAMPLE_BYTES: int = 16777216;
 
 /// Where the app keeps its files. `$HOME/Documents/Ray808` works on macOS, Linux and
-/// iOS (whose container root is read-only, but `Documents/` is writable). The Android
-/// shell sets no HOME and runs with cwd=/, so there the app's private data directory is
-/// derived from its package name (the process's argv[0]).
+/// iOS (whose container root is read-only, but `Documents/` is writable). On Android the
+/// shell sets HOME to the app's private files directory (`/data/data/<package>/files`,
+/// raylang 1.27.13), and the data lives directly under it.
 pub fn default_dir() -> string {
-    if (platform() == "android") {
-        match (android_package()) {
-            Option.Some(pkg) => return "/data/data/${pkg}/files/Ray808",
-            Option.None => { },
-        }
-    }
     match (env("HOME")) {
-        Option.Some(h) => "${h}/Documents/Ray808",
+        Option.Some(h) => data_dir_under(platform(), h),
         Option.None => "./Ray808",
     }
 }
 
-/// The Android package name: an app process's command line is its package id.
-fn android_package() -> Option<string> {
-    let raw = match (fs.read_file_bytes("/proc/self/cmdline")) {
-        Result.Ok(b) => b,
-        Result.Err(_) => return Option.None,
-    };
-    let end = raw.index_of(bytes_of([0])).unwrap_or(raw.len());
-    match (from_utf8(raw.sub_bytes(0, end))) {
-        Result.Ok(s) => {
-            let pkg = s.split(":")[0].trim();  // "org.x.app:service" → "org.x.app"
-            if (pkg.len() == 0 || pkg.contains("/")) { Option.None } else { Option.Some(pkg) }
-        },
-        Result.Err(_) => Option.None,
-    }
+/// The data directory for a platform and a home directory.
+pub fn data_dir_under(os: string, home: string) -> string {
+    if (os == "android") { "${home}/Ray808" } else { "${home}/Documents/Ray808" }
 }
 
 pub fn is_voice(id: string) -> bool {

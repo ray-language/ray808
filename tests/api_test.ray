@@ -48,7 +48,7 @@ fn state_round_trips_through_the_backend() {
     assert(is_ok(saved));
     let loaded = reply(dir, `{"op":"state.load"}`);
     match (json.member(loaded, "state")) {
-        Option.Some(s) => assert_eq(json.get_int(s, "tempo").unwrap_or(-1), 133),
+        Option.Some(s) => assert_eq(json.get_int(s, "tempo"), Option.Some(133)),
         Option.None => panic("no state field"),
     }
     let _ = fs.remove_all(dir);
@@ -83,7 +83,7 @@ fn a_user_sample_survives_as_bytes_and_name() {
     );
     assert(is_ok(put));
     let got = reply(dir, `{"op":"sample.get","voice":"BD"}`);
-    assert_eq(json.get_string(got, "name").unwrap_or(""), "kick.wav");
+    assert_eq(json.get_string(got, "name"), Option.Some("kick.wav"));
     match (base64.base64_decode(json.get_string(got, "data").unwrap_or(""))) {
         Result.Ok(b) => assert_eq(b, data),
         Result.Err(e) => panic(e),
@@ -92,7 +92,7 @@ fn a_user_sample_survives_as_bytes_and_name() {
     match (json.get_array(list, "samples")) {
         Option.Some(items) => {
             assert_eq(items.len(), 1);
-            assert_eq(json.get_string(items[0], "voice").unwrap_or(""), "BD");
+            assert_eq(json.get_string(items[0], "voice"), Option.Some("BD"));
         },
         Option.None => panic("no samples field"),
     }
@@ -119,10 +119,7 @@ fn without_dialogs_an_export_lands_in_exports() {
     assert(is_ok(r));
     let path = json.get_string(r, "path").unwrap_or("");
     assert_eq(path, store.exports_dir(dir) + "/.._pt01.wav");
-    match (fs.read_file_bytes(path)) {
-        Result.Ok(b) => assert_eq(b, data),
-        Result.Err(e) => panic(e),
-    }
+    assert_eq(fs.read_file_bytes(path), Result.Ok(data));
     let _ = fs.remove_all(dir);
 }
 
@@ -183,4 +180,15 @@ fn names_are_cleaned_before_touching_the_disk() {
     assert_eq(store.clean_name("a/b\\c.wav"), "a_b_c.wav");
     assert_eq(store.clean_name("   "), "sample");
     assert_eq(store.clean_name("x\u{1}y"), "x_y");
+}
+
+@test
+fn the_data_directory_follows_the_platform_home() {
+    // Android's shell sets HOME to the app's private files directory (raylang 1.27.13).
+    assert_eq(
+        store.data_dir_under("android", "/data/user/0/org.raylang.ray808/files"),
+        "/data/user/0/org.raylang.ray808/files/Ray808"
+    );
+    assert_eq(store.data_dir_under("ios", "/var/mobile/x"), "/var/mobile/x/Documents/Ray808");
+    assert_eq(store.data_dir_under("macos", "/Users/me"), "/Users/me/Documents/Ray808");
 }

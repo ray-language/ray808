@@ -3,17 +3,18 @@
 # Generated projects (Ray808.app, Ray808-ios/, Ray808-android/) are not versioned: create
 # them once with the bundle-* targets. After that, a change to the React page or to src/*.ray
 # only needs the static library rebuilt (ios-lib), which never touches the Xcode project or
-# its signing (keep DEVELOPMENT_TEAM in Ray808-ios/App.xcconfig, not in Xcode's Signing tab).
+# its signing (keep DEVELOPMENT_TEAM in Ray808-ios/App.xcconfig; since raylang 1.27.13 a team
+# chosen in Xcode's Signing tab is also rescued into it on regeneration).
 
 APP     := Ray808
 IOS     := $(APP)-ios
 ANDROID := $(APP)-android
 NPM     := npm --prefix frontend
-LOCAL_NETWORK_TEXT := Ray808 connects to the Vite dev server on your computer while you develop the app (hot reload).
+SHARED  := $(IOS)/$(APP).xcodeproj/xcshareddata
 
 .DEFAULT_GOAL := help
 .PHONY: help install dev dev-device test test-backend lint build smoke icon \
-        bundle-macos bundle-ios ios-lib ios-lib-sim ios-libs ios-local-network ios-sim-build \
+        bundle-macos bundle-ios ios-lib ios-lib-sim ios-libs ios-sim-build \
         bundle-android android-apk
 
 help: ## List the targets
@@ -57,9 +58,15 @@ bundle-macos: ## Build Ray808.app
 
 # ---- iOS ----
 
+# `ray bundle --ios` rewrites Ray808.xcodeproj as a whole, shared scheme included (the one that
+# carries RAY808_DEV_URL): keep a copy of xcshareddata/ and put it back afterwards.
 bundle-ios: ## (Re)generate the Xcode project in Ray808-ios/ — only when [app] or raylang changes
-	ray bundle --ios
-	@$(MAKE) --no-print-directory ios-local-network
+	@tmp=$$(mktemp -d) && \
+	if [ -d $(SHARED) ]; then cp -R $(SHARED) $$tmp/; fi && \
+	ray bundle --ios && \
+	if [ -d $$tmp/xcshareddata ]; then \
+		cp -R $$tmp/xcshareddata $(IOS)/$(APP).xcodeproj/ && echo "kept the shared Xcode scheme"; \
+	fi; status=$$?; rm -rf $$tmp; exit $$status
 
 ios-lib: ## Rebuild the iPhone static library (after UI or backend changes); Xcode project untouched
 	ray build --native --lib --release --target aarch64-apple-ios -o $(IOS)/libs/libray_app.a
@@ -68,14 +75,6 @@ ios-lib-sim: ## Rebuild the simulator static library
 	ray build --native --lib --release --target aarch64-apple-ios-sim -o $(IOS)/libs-sim/libray_app.a
 
 ios-libs: ios-lib ios-lib-sim ## Rebuild both static libraries
-
-ios-local-network: ## Add NSLocalNetworkUsageDescription to the shell Info.plist (needed for dev-device)
-	@if /usr/libexec/PlistBuddy -c "Print :NSLocalNetworkUsageDescription" $(IOS)/Shell/Info.plist >/dev/null 2>&1; then \
-		echo "NSLocalNetworkUsageDescription already set"; \
-	else \
-		plutil -insert NSLocalNetworkUsageDescription -string "$(LOCAL_NETWORK_TEXT)" $(IOS)/Shell/Info.plist && \
-		echo "NSLocalNetworkUsageDescription added"; \
-	fi
 
 ios-sim-build: ios-lib-sim ## Build the app for the simulator (unsigned)
 	cd $(IOS) && xcodebuild -project $(APP).xcodeproj -target $(APP) -sdk iphonesimulator \
