@@ -1,0 +1,26 @@
+import frontend;
+
+fn hp(u: string) -> string {
+    match (frontend.host_port(u)) {
+        Option.Some(x) => "${x.0}:${x.1}",
+        Option.None => "none",
+    }
+}
+
+@test
+fn dev_server_urls_parse_to_host_and_port() {
+    assert_eq(hp("http://192.168.1.16:5173/"), "192.168.1.16:5173");
+    assert_eq(hp("http://mac.local:5173"), "mac.local:5173");
+    assert_eq(hp("http://mac.local/index.html"), "mac.local:80");
+    assert_eq(hp("https://dev.example"), "dev.example:443");
+    assert_eq(hp("ftp://x:21"), "none");
+    assert_eq(hp("http://:5173"), "none");
+    assert_eq(hp("http://host:port"), "none");
+}
+
+@test
+fn a_dead_dev_server_is_not_reachable() {
+    // Port 9 (discard) on loopback: nothing listens there on a dev machine or in CI.
+    assert(!frontend.reachable("http://127.0.0.1:9/", 500));
+    assert(!frontend.reachable("not a url", 500));
+}

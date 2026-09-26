@@ -56,11 +56,30 @@ fn main() -> int {
     let dir = store.default_dir();
     let dialogs = if (is_mobile()) { api.no_dialogs() } else { desktop_dialogs() };
 
-    let url = match (frontend.start(frontend.new_token())) {
-        Result.Ok(u) => u,
-        Result.Err(e) => {
-            eprint("ray808: cannot start the local server: " + e);
-            return 1;
+    // Development: a dev server named by RAY808_DEV_URL (see frontend.ray), when it answers;
+    // otherwise, and always in normal use, the embedded build on the local server.
+    let dev: Option<string> = match (frontend.dev_url()) {
+        Option.Some(u) => {
+            if (frontend.reachable(u, 1500)) {
+                eprint("ray808: loading the page from the dev server " + u);
+                Option.Some(u)
+            } else {
+                eprint("ray808: dev server " + u + " not reachable, using the embedded build");
+                Option.None
+            }
+        },
+        Option.None => Option.None,
+    };
+    let url = match (dev) {
+        Option.Some(u) => u,
+        Option.None => {
+            match (frontend.start(frontend.new_token())) {
+                Result.Ok(u) => ui.app_url(u),  // under `ray dev`: the Vite dev server's origin
+                Result.Err(e) => {
+                    eprint("ray808: cannot start the local server: " + e);
+                    return 1;
+                },
+            }
         },
     };
     if (!is_mobile()) {
@@ -71,8 +90,7 @@ fn main() -> int {
     o.min_height = 560;
     o.autosave = "ray808.main";
     o.titlebar_color = "#16161a";
-    // Under `ray dev`, app_url swaps the local server's origin for the Vite dev server's.
-    let window = match (ui.open_with(APP_NAME, ui.app_url(url), o)) {
+    let window = match (ui.open_with(APP_NAME, url, o)) {
         Result.Ok(w) => w,
         Result.Err(e) => {
             eprint("ray808: " + e);

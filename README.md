@@ -106,6 +106,27 @@ ray run                     # la build embebida (npm --prefix frontend run build
 | `←` / `→` | selecciona instrumento |
 | Sobre un knob: arrastre vertical, rueda, doble clic, flechas | ajustar |
 
+## Hot reload en el iPhone
+
+`ray dev` no llega al teléfono, pero la página React sí puede recargarse en caliente en el
+iPhone: el webview carga el dev server de Vite de tu Mac en vez de la build embebida, y
+`window.ray` (que el shell inyecta en cualquier página) sigue hablando con el programa raylang
+que corre en el teléfono.
+
+1. En el Mac, con el iPhone en la misma red:
+   ```bash
+   npm --prefix frontend run dev:device    # Vite en 0.0.0.0:5173; imprime la URL "Network"
+   ```
+2. En Xcode, *Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables*:
+   activa `RAY808_DEV_URL` con esa URL (p. ej. `http://192.168.1.16:5173`) y ejecuta la app.
+   La primera vez iOS pide permiso de red local.
+3. Edita cualquier componente o CSS: el iPhone se actualiza al guardar.
+
+Si el dev server no responde en 1,5 s, la app avisa en la consola y carga la build embebida:
+nunca queda en blanco. Sin la variable (o desactivada) se comporta como siempre. El hot reload
+cubre el frontend; un cambio en `src/*.ray` sigue pidiendo recompilar la librería (abajo) e
+instalar de nuevo.
+
 ## Empaquetar
 
 ```bash

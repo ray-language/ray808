@@ -35,3 +35,70 @@ pub fn start(token: string) -> Result<string, string> {
 pub fn new_token() -> string {
     webserver.local_token()
 }
+
+// ---- Development: the page from a Vite dev server on another machine ----
+//
+// On a phone there is no `ray dev`, and a native build never looks at RAY_FRONTEND_URL.
+// To iterate on the React page with hot reload on the device, launch the app with
+// RAY808_DEV_URL=http://<your-mac>:5173 (an environment variable of the Xcode scheme) and
+// run `npm --prefix frontend run dev:device` on the Mac: the window loads the dev server
+// instead of the embedded build. window.ray is injected into whatever page the webview
+// loads, so the page still talks to this program on the device.
+
+/// The dev server URL from RAY808_DEV_URL, if it is set to an http(s) URL.
+pub fn dev_url() -> Option<string> {
+    match (env("RAY808_DEV_URL")) {
+        Option.Some(u) => {
+            let t = u.trim();
+            if (t.starts_with("http://") || t.starts_with("https://")) {
+                Option.Some(t)
+            } else {
+                Option.None
+            }
+        },
+        Option.None => Option.None,
+    }
+}
+
+/// Host and port of an http(s) URL ("http://192.168.1.16:5173/x" → ("192.168.1.16", 5173)).
+pub fn host_port(u: string) -> Option<(string, int)> {
+    let https = u.starts_with("https://");
+    let rest = if (https) {
+        u.substring(8, u.len())
+    } else if (u.starts_with("http://")) {
+        u.substring(7, u.len())
+    } else {
+        return Option.None;
+    };
+    let authority = rest.split("/")[0];
+    if (authority.len() == 0) {
+        return Option.None;
+    }
+    let parts = authority.split(":");
+    if (parts[0].len() == 0) {
+        return Option.None;  // no host ("http://:5173")
+    }
+    if (parts.len() == 1) {
+        return Option.Some((authority, if (https) { 443 } else { 80 }));
+    }
+    match (parse_int(parts[1])) {
+        Option.Some(p) => Option.Some((parts[0], p)),
+        Option.None => Option.None,
+    }
+}
+
+/// Whether something accepts connections at the URL's host and port within `ms`.
+pub fn reachable(u: string, ms: int) -> bool {
+    match (host_port(u)) {
+        Option.Some(hp) => {
+            match (net.tcp_connect_timeout(hp.0, hp.1, ms)) {
+                Result.Ok(h) => {
+                    close(h);
+                    true
+                },
+                Result.Err(_) => false,
+            }
+        },
+        Option.None => false,
+    }
+}
