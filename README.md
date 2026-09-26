@@ -36,7 +36,10 @@ soporte de **frontends con Vite** de raylang: nació con `ray new ray808 --front
 El panel de escritorio (12 columnas de knobs) es inservible en 390 px, así que por debajo de
 760 px la app cambia de estructura, no solo de tamaño:
 
-- **Barra fija arriba** con el display y START/STOP + TAP: el transporte siempre a mano.
+- **Cabecera fija** con el display y START/STOP + TAP, bajo la zona de la cámara y la barra
+  de estado. Solo se desplaza el contenido de debajo: en iOS, un toque sobre una vista que
+  aún se desliza por inercia solo la frena, así que un START dentro de la página desplazable
+  se perdería. START y TAP actúan al presionar.
 - **Los 16 pasos primero**, en **8 × 2** con botones del tamaño de un pulgar (38×52 px como
   mínimo), que se activan al **presionar** (no al soltar) para no perder golpes rápidos.
 - **Tira de instrumentos** con scroll lateral (las placas serigrafiadas) y, debajo, los knobs

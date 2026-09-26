@@ -123,21 +123,33 @@ const ledPosition = (page) =>
   const stepBox = await page.locator('.step__btn').first().boundingBox();
   check(stepBox.width >= 38 && stepBox.height >= 44, `phone: step buttons are thumb-sized (${Math.round(stepBox.width)}×${Math.round(stepBox.height)})`);
 
-  // A notched iPhone: Chrome reports no safe area, so set the inset the page reads, scroll,
-  // and check the pinned bar stays below it with the opaque band over the status bar.
+  // A notched iPhone: Chrome reports no safe area, so set the inset the page reads. Only
+  // <main> scrolls (a control inside a coasting scroll view loses its first tap on iOS):
+  // the header with START/STOP must not move, and must sit below the status bar.
   await page.evaluate(() => document.documentElement.style.setProperty('--safe-top', '59px'));
-  await page.evaluate(() => window.scrollTo(0, 900));
-  await page.waitForTimeout(100);
-  const pinned = await page.evaluate(() => {
-    const bar = document.querySelector('.topbar').getBoundingClientRect();
-    const band = getComputedStyle(document.querySelector('.machine--phone'), '::before');
-    return { top: Math.round(bar.top), band: band.height, bg: band.backgroundColor };
+  await page.waitForTimeout(50);
+  const barTop = () => page.evaluate(() => Math.round(document.querySelector('.topbar').getBoundingClientRect().top));
+  const before = await barTop();
+  const scrolled = await page.evaluate(() => {
+    const main = document.querySelector('.phone-scroll');
+    main.scrollTop = 900;
+    return {
+      main: main.scrollTop,
+      doc: document.scrollingElement.scrollHeight - window.innerHeight,
+    };
   });
-  check(pinned.top === 59, `phone: scrolled, START/STOP stays below the status bar (top ${pinned.top}px)`);
-  check(pinned.band === '59px' && pinned.bg !== 'rgba(0, 0, 0, 0)', `phone: an opaque band covers the status bar (${pinned.band})`);
+  await page.waitForTimeout(100);
+  const after = await barTop();
+  const brandTop = await page.evaluate(() => Math.round(document.querySelector('.phone-header').getBoundingClientRect().top));
+  check(scrolled.main > 0 && scrolled.doc <= 0, `phone: only <main> scrolls (main ${scrolled.main}px, page ${scrolled.doc}px)`);
+  check(before === after && brandTop >= 59, `phone: START/STOP stays put below the status bar (header at ${brandTop}px, bar ${before}→${after}px)`);
   await page.screenshot({ path: `${OUT}/phone-scrolled-notch.png` });
+  await page.locator('.start-btn').tap();
+  await page.waitForTimeout(500);
+  check((await ledPosition(page)) !== -1, 'phone: START answers right after scrolling');
+  await page.locator('.start-btn').tap();
   await page.evaluate(() => {
-    window.scrollTo(0, 0);
+    document.querySelector('.phone-scroll').scrollTop = 0;
     document.documentElement.style.removeProperty('--safe-top');
   });
 

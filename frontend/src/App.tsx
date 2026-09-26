@@ -455,16 +455,22 @@ export default function App() {
   if (phone) {
     return (
       <div className="machine machine--phone">
-        <header className="brand">
-          {brand}
-          <button className="menu-btn" aria-label="Menu" onClick={() => setSheetOpen(true)}>
-            ⋯
-          </button>
-        </header>
-        <div className="topbar">
-          {display}
-          {run}
+        {/* The header never scrolls: on iOS the first touch on a view that is still
+            coasting only stops it, so a START/STOP inside the scrolling page would swallow
+            the tap. Only <main> below scrolls. */}
+        <div className="phone-header">
+          <header className="brand">
+            {brand}
+            <button className="menu-btn" aria-label="Menu" onClick={() => setSheetOpen(true)}>
+              ⋯
+            </button>
+          </header>
+          <div className="topbar">
+            {display}
+            {run}
+          </div>
         </div>
+        <main className="phone-scroll">
         <section className="card">
           <div className="section-label">
             STEPS · {selectedStrip.plate} · {pt(state.pattern)} {editVariation(state.variationMode)}
@@ -490,6 +496,7 @@ export default function App() {
           {tempo}
         </section>
         <section className="card">{patterns}</section>
+        </main>
         {overlays}
       </div>
     );

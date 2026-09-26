@@ -1,3 +1,4 @@
+import type { MouseEvent, PointerEvent } from 'react';
 import { NUM_PATTERNS, type VariationMode } from '../machine/pattern';
 import { knobToTempo, tempoToKnob } from '../machine/tempo';
 import { Knob } from './Knob';
@@ -108,15 +109,33 @@ interface RunProps {
 export function RunButtons({ playing, onStartStop, onTap }: RunProps) {
   return (
     <div className="transport__run">
-      <button className={`start-btn${playing ? ' start-btn--on' : ''}`} aria-pressed={playing} onClick={onStartStop}>
+      <button className={`start-btn${playing ? ' start-btn--on' : ''}`} aria-pressed={playing} {...pressHandlers(onStartStop)}>
         <span className="start-btn__led" />
         START
         <br />
         STOP
       </button>
-      <button className="tap-btn" onClick={onTap}>
+      <button className="tap-btn" {...pressHandlers(onTap)}>
         TAP
       </button>
     </div>
   );
+}
+
+/**
+ * Acts on press, not on release: START and TAP are timing controls (a click fires only
+ * when the finger lifts, and a mobile webview may drop it altogether). A keyboard press
+ * (Enter/Space) still arrives as a click with `detail === 0`.
+ */
+function pressHandlers(action: () => void) {
+  return {
+    onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      action();
+    },
+    onClick: (e: MouseEvent<HTMLButtonElement>) => {
+      if (e.detail === 0) action();
+    },
+  };
 }

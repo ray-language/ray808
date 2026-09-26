@@ -69,35 +69,47 @@ body:has(.machine--phone) {
   background: var(--chassis);
 }
 
+/* The phone app is a fixed-height column: a header that never moves and a <main> that
+   is the only scrolling element (see App.tsx). */
+html:has(.machine--phone),
+body:has(.machine--phone) {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .machine--phone {
   width: 100%;
-  min-height: 100dvh;
+  height: 100dvh;
   border-radius: 0;
-  padding: var(--safe-top) calc(10px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom))
-    calc(10px + env(safe-area-inset-left));
+  padding: var(--safe-top) calc(10px + env(safe-area-inset-right)) 0 calc(10px + env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: none;
+}
+.machine--phone::before,
+.machine--phone::after { display: none; }
+
+.phone-header {
+  flex: none;
+  position: relative;
+  z-index: 20;
+  box-shadow: 0 10px 12px -8px rgba(0 0 0 / 0.8);
+}
+
+.phone-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: none;
+  padding: 10px 0 calc(18px + env(safe-area-inset-bottom));
 }
-.machine--phone::after { display: none; }
 
-/* An opaque band over the status bar: what scrolls up passes under it, never behind the
-   clock, the battery or the camera. */
-.machine--phone::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: auto;
-  width: auto;
-  height: var(--safe-top);
-  z-index: 30;
-  border-radius: 0;
-  background: var(--chassis);
-  box-shadow: none;
-}
 
 .machine--phone .brand {
   flex-wrap: nowrap;
@@ -122,15 +134,11 @@ body:has(.machine--phone) {
 }
 
 .topbar {
-  position: sticky;
-  top: var(--safe-top); /* pinned just below the status bar, not under it */
-  z-index: 20;
   display: grid;
   grid-template-columns: 1fr 150px;
   gap: 10px;
   padding: 8px 0;
   background: var(--chassis);
-  box-shadow: 0 10px 12px -8px rgba(0 0 0 / 0.8);
 }
 .topbar .display { min-height: 0; padding: 8px 10px; }
 .topbar .display__bpm { font-size: 26px; }
@@ -239,5 +247,5 @@ button,
    leave room for the status bar and the gesture bar ourselves (App sets data-platform
    from the backend's hello). */
 html[data-platform='android'] { --safe-top: 30px; }
-html[data-platform='android'] .machine--phone { padding-bottom: 28px; }
+html[data-platform='android'] .phone-scroll { padding-bottom: 28px; }
 html[data-platform='android'] .sheet-backdrop { padding-bottom: 40px; }
