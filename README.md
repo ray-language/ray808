@@ -92,6 +92,11 @@ El panel de escritorio (12 columnas de knobs) es inservible en 390 px, así que 
 
 ## Uso
 
+Las tareas habituales están en el `Makefile` (`make` las lista): `make dev` (escritorio con
+hot reload), `make dev-device` (Vite en la red para el iPhone), `make test` (tests del backend,
+lint, build y smoke), `make ios-lib` (recompila la librería del iPhone sin tocar el proyecto
+Xcode), `make bundle-ios` / `make bundle-android` / `make bundle-macos`.
+
 ```bash
 npm --prefix frontend install
 ray dev                     # ventana nativa sobre el dev server de Vite (hot reload)
