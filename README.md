@@ -117,7 +117,18 @@ ray bundle --android --android-abi arm64     # proyecto Gradle en Ray808-android
 (cd Ray808-android && gradle assembleDebug)  # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Los proyectos generados no se versionan: se regeneran con `ray bundle`. `--ios-target sim`
+Los proyectos generados no se versionan: se crean una vez con `ray bundle`. Después, un cambio
+en el frontend o en el programa raylang **no pide regenerar el proyecto**: la página va
+embebida en la librería estática, así que basta recompilarla (corre el build de Vite y deja
+intactos `project.pbxproj`, `App.xcconfig` y la firma):
+
+```bash
+ray build --native --lib --release --target aarch64-apple-ios     -o Ray808-ios/libs/libray_app.a      # iPhone
+ray build --native --lib --release --target aarch64-apple-ios-sim -o Ray808-ios/libs-sim/libray_app.a  # simulador
+```
+
+y compilar de nuevo en Xcode. `ray bundle --ios` solo hace falta si cambia el `[app]` del
+`ray.toml` (nombre, id, icono) o la versión de raylang trae un shell nuevo. `--ios-target sim`
 acelera la iteración en el simulador, pero deja el proyecto **sin la librería de dispositivo**
 (`libs/libray_app.a`): compilar para un iPhone desde Xcode falla con «Library 'ray_app' not
 found» hasta regenerar con `ray bundle --ios` (ambos destinos, el valor por defecto).
