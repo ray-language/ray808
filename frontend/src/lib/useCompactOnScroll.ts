@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type RefObject, type UIEvent } from 'react';
 
-/** Distance a swipe must travel in one direction before the header changes. */
-const THRESHOLD = 12;
+/** Travel down the page (content moving up) that compacts the header. */
+const COLLAPSE_TRAVEL = 12;
+/**
+ * Travel back up that restores it. Much larger on purpose: a fast fling on iOS ends with a
+ * small reverse bounce (and the rubber band at the bottom edge springs back), which must
+ * not read as "the user scrolled up".
+ */
+const EXPAND_TRAVEL = 64;
+/** After compacting, how long a reverse movement is ignored (the fling's bounce). */
+const EXPAND_COOLDOWN_MS = 350;
 
 /**
  * The phone header's compact mode, driven by <main>'s scroll.
@@ -11,7 +19,7 @@ const THRESHOLD = 12;
  * uncovers or covers what lies beneath. The header compacts on a swipe up only once the
  * content has scrolled up to the compact header's edge (scrollTop ≥ full − compact
  * height), so no gap ever opens above the content; below that point it is always full.
- * A swipe down restores it.
+ * A deliberate swipe down (EXPAND_TRAVEL) restores it; a fling's bounce does not.
  *
  * It also publishes the full header's height as `--header-h` on `root` (the padding
  * <main> reserves), measured while the header is full.
@@ -25,6 +33,7 @@ export function useCompactOnScroll(
   const [compact, setCompact] = useState(false);
   const last = useRef(0);
   const travel = useRef(0);
+  const noExpandUntil = useRef(0);
   // full = 0 until measured; compact defaults to the CSS's compact size.
   const heights = useRef({ full: 0, compact: 48 });
 
@@ -59,7 +68,8 @@ export function useCompactOnScroll(
 
   const onScroll = useCallback(
     (e: UIEvent<HTMLElement>) => {
-      const top = e.currentTarget.scrollTop;
+      const el = e.currentTarget;
+      const top = el.scrollTop;
       const delta = top - last.current;
       last.current = top;
       const collapseAt = Math.max(0, heights.current.full - heights.current.compact);
@@ -71,12 +81,19 @@ export function useCompactOnScroll(
         if (compact) setCompact(false);
         return;
       }
+      // At (or rubber-banding past) the bottom edge the movement is the bounce, not the user.
+      const maxTop = el.scrollHeight - el.clientHeight;
+      if (top >= maxTop - 2 && delta < 0) {
+        travel.current = 0;
+        return;
+      }
       // Accumulate travel in one direction; a change of direction starts over.
       travel.current = Math.sign(delta) === Math.sign(travel.current) ? travel.current + delta : delta;
-      if (!compact && travel.current > THRESHOLD) {
+      if (!compact && travel.current > COLLAPSE_TRAVEL) {
         travel.current = 0;
+        noExpandUntil.current = performance.now() + EXPAND_COOLDOWN_MS;
         setCompact(true);
-      } else if (compact && travel.current < -THRESHOLD) {
+      } else if (compact && travel.current < -EXPAND_TRAVEL && performance.now() >= noExpandUntil.current) {
         travel.current = 0;
         setCompact(false);
       }

@@ -171,13 +171,25 @@ const ledPosition = (page) =>
   check((await ledPosition(page)) !== -1, 'phone: START answers in the compact header');
   await page.locator('.start-btn').tap();
 
-  await setMain(260);
+  // Expanding needs a deliberate swipe: a fling's bounce or a short reverse must not do it.
+  // (<main> scrolls ~310 px on this phone; the header compacts past ~109 px.)
+  await scrollMain(270);
+  check((await header()).compact, 'phone: a short reverse (30 px) keeps the header compact');
+
+  await setMain(190);
   await page.waitForTimeout(30);
   const y2 = await contentY();
   await page.waitForTimeout(350);
   const y3 = await contentY();
-  check(!(await header()).compact, 'phone: scrolling back up restores the header');
+  check(!(await header()).compact, 'phone: a deliberate swipe back up (80 px) restores the header');
   check(y2 === y3, `phone: the content does not jump while the header expands (${y2} → ${y3}px)`);
+
+  await setMain(250); // compacts again…
+  await page.waitForTimeout(40);
+  await setMain(180); // …and a 70 px reverse right away: the fling's bounce, not the user
+  await page.waitForTimeout(60);
+  check((await header()).compact, 'phone: a bounce right after compacting keeps it compact');
+  await page.waitForTimeout(400);
 
   await scrollMain(100000);
   const states = [];
@@ -186,6 +198,17 @@ const ledPosition = (page) =>
     await page.waitForTimeout(80);
   }
   check(states.every(Boolean), `phone: at the bottom the header settles compact (${states.join(',')})`);
+  const bottom = await page.evaluate(() => {
+    const m = document.querySelector('.phone-scroll');
+    return m.scrollHeight - m.clientHeight;
+  });
+  await setMain(bottom - 40); // the rubber band springing back from the bottom edge
+  await page.waitForTimeout(80);
+  await setMain(bottom);
+  await page.waitForTimeout(80);
+  await setMain(bottom - 30);
+  await page.waitForTimeout(80);
+  check((await header()).compact, 'phone: the bounce at the bottom edge keeps it compact');
 
   await scrollMain(0);
   check(!(await header()).compact, 'phone: back at the top the header is full size');
