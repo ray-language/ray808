@@ -115,8 +115,9 @@ fn main() -> int {
                     // The iOS/Android shells deliver page messages with window 0 (they do
                     // not know the program's handle), but ui.reply(0, …) finds no such
                     // window and the page's Promise would never resolve: answer our one
-                    // window instead. Still needed with raylang 1.27.13: on the iOS
-                    // simulator ui.reply(0, …) keeps failing with "not an open window".
+                    // window instead. Still needed with raylang 1.27.15, although `ray doc
+                    // ui.reply` now says reply(0, …) answers the shell: on the iOS simulator
+                    // it keeps failing with "not an open window" (RAYLANG-FINDINGS #38).
                     let target = if (e.window == 0) { window } else { e.window };
                     match (ui.reply(target, req.0, api.handle(dir, req.1, dialogs))) {
                         Result.Err(err) => eprint("ray808: reply: " + err),
