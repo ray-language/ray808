@@ -111,8 +111,8 @@ export function RunButtons({ playing, onStartStop, onTap }: RunProps) {
     <div className="transport__run">
       <button className={`start-btn${playing ? ' start-btn--on' : ''}`} aria-pressed={playing} {...pressHandlers(onStartStop)}>
         <span className="start-btn__led" />
-        START
-        <br />
+        START{' '}
+        <br className="start-btn__br" />
         STOP
       </button>
       <button className="tap-btn" {...pressHandlers(onTap)}>

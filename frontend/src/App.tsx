@@ -23,6 +23,7 @@ import {
 import { hello } from './lib/bridge';
 import { exportFile, importJsonText } from './lib/files';
 import { clearState, deleteUserSample, loadState, loadUserSamples, saveState, saveUserSample } from './lib/storage';
+import { useCompactOnScroll } from './lib/useCompactOnScroll';
 import { useMediaQuery } from './lib/useMediaQuery';
 
 const ACTIONS: MenuAction[] = [
@@ -59,6 +60,7 @@ export default function App() {
   const [custom, setCustom] = useState(new Map<VoiceId, string>());
   const [samplesOpen, setSamplesOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const header = useCompactOnScroll();
   const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessageText] = useState('');
   const msgTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -458,7 +460,7 @@ export default function App() {
         {/* The header never scrolls: on iOS the first touch on a view that is still
             coasting only stops it, so a START/STOP inside the scrolling page would swallow
             the tap. Only <main> below scrolls. */}
-        <div className="phone-header">
+        <div className={`phone-header${header.compact ? ' phone-header--compact' : ''}`}>
           <header className="brand">
             {brand}
             <button className="menu-btn" aria-label="Menu" onClick={() => setSheetOpen(true)}>
@@ -470,7 +472,7 @@ export default function App() {
             {run}
           </div>
         </div>
-        <main className="phone-scroll">
+        <main className="phone-scroll" onScroll={header.onScroll}>
         <section className="card">
           <div className="section-label">
             STEPS · {selectedStrip.plate} · {pt(state.pattern)} {editVariation(state.variationMode)}

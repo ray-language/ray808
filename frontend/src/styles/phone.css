@@ -249,3 +249,55 @@ button,
 html[data-platform='android'] { --safe-top: 30px; }
 html[data-platform='android'] .phone-scroll { padding-bottom: 28px; }
 html[data-platform='android'] .sheet-backdrop { padding-bottom: 40px; }
+
+/* ---------- Compact header while reading down the page (phone) ----------
+ * Swiping the content up hides the title row and flattens the display and the transport
+ * buttons into one short row; swiping down (or reaching the top) restores them. The
+ * durations match TRANSITION_MS in useCompactOnScroll.ts. */
+.phone-header .brand {
+  max-height: 64px;
+  overflow: hidden;
+  transition: max-height 0.22s ease, opacity 0.16s ease, padding 0.22s ease, border-width 0.22s ease;
+}
+.phone-header .topbar { transition: padding 0.22s ease; }
+.phone-header .display,
+.phone-header .start-btn,
+.phone-header .tap-btn { transition: padding 0.22s ease, min-height 0.22s ease; }
+.phone-header .display__bpm { transition: font-size 0.22s ease; }
+
+.phone-header--compact .brand {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom-width: 0;
+}
+.phone-header--compact .topbar { padding: 6px 0; }
+.phone-header--compact .topbar .display {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 4px 10px;
+}
+.phone-header--compact .topbar .display__bpm { font-size: 20px; }
+.phone-header--compact .topbar .display__row--small { margin-top: 0; }
+.phone-header--compact .topbar .display__msg { display: none; }
+.phone-header--compact .topbar .start-btn {
+  padding: 10px 14px 10px 6px;
+  line-height: 1.2;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.phone-header--compact .topbar .start-btn__br { display: none; }
+.phone-header--compact .topbar .start-btn__led { top: 50%; right: 6px; transform: translateY(-50%); width: 6px; height: 6px; }
+.phone-header--compact .topbar .tap-btn { min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-header .brand,
+  .phone-header .topbar,
+  .phone-header .display,
+  .phone-header .start-btn,
+  .phone-header .tap-btn,
+  .phone-header .display__bpm { transition: none; }
+}

@@ -124,34 +124,57 @@ const ledPosition = (page) =>
   check(stepBox.width >= 38 && stepBox.height >= 44, `phone: step buttons are thumb-sized (${Math.round(stepBox.width)}×${Math.round(stepBox.height)})`);
 
   // A notched iPhone: Chrome reports no safe area, so set the inset the page reads. Only
-  // <main> scrolls (a control inside a coasting scroll view loses its first tap on iOS):
-  // the header with START/STOP must not move, and must sit below the status bar.
+  // <main> scrolls (a control inside a coasting scroll view loses its first tap on iOS);
+  // the header compacts while reading down and comes back when scrolling up.
   await page.evaluate(() => document.documentElement.style.setProperty('--safe-top', '59px'));
   await page.waitForTimeout(50);
-  const barTop = () => page.evaluate(() => Math.round(document.querySelector('.topbar').getBoundingClientRect().top));
-  const before = await barTop();
-  const scrolled = await page.evaluate(() => {
-    const main = document.querySelector('.phone-scroll');
-    main.scrollTop = 900;
-    return {
-      main: main.scrollTop,
-      doc: document.scrollingElement.scrollHeight - window.innerHeight,
-    };
-  });
-  await page.waitForTimeout(100);
-  const after = await barTop();
-  const brandTop = await page.evaluate(() => Math.round(document.querySelector('.phone-header').getBoundingClientRect().top));
-  check(scrolled.main > 0 && scrolled.doc <= 0, `phone: only <main> scrolls (main ${scrolled.main}px, page ${scrolled.doc}px)`);
-  check(before === after && brandTop >= 59, `phone: START/STOP stays put below the status bar (header at ${brandTop}px, bar ${before}→${after}px)`);
-  await page.screenshot({ path: `${OUT}/phone-scrolled-notch.png` });
+  const header = () =>
+    page.evaluate(() => {
+      const h = document.querySelector('.phone-header');
+      const r = h.getBoundingClientRect();
+      return {
+        compact: h.classList.contains('phone-header--compact'),
+        top: Math.round(r.top),
+        height: Math.round(r.height),
+        start: Math.round(document.querySelector('.start-btn').getBoundingClientRect().height),
+        page: document.scrollingElement.scrollHeight - window.innerHeight,
+      };
+    });
+  const scrollMain = async (y) => {
+    await page.evaluate((v) => (document.querySelector('.phone-scroll').scrollTop = v), y);
+    await page.waitForTimeout(350); // past the header's transition
+  };
+  const full = await header();
+  check(!full.compact && full.top >= 59, `phone: the header starts full size below the status bar (top ${full.top}px, ${full.height}px tall)`);
+  check(full.page <= 0, 'phone: the page itself never scrolls, only <main>');
+
+  await scrollMain(300);
+  const small = await header();
+  check(small.compact && small.height < full.height - 40 && small.start < full.start, `phone: scrolling down compacts the header (${full.height} → ${small.height}px, START ${full.start} → ${small.start}px)`);
+  check(small.top >= 59, `phone: the compact header stays below the status bar (top ${small.top}px)`);
+  await page.screenshot({ path: `${OUT}/phone-compact.png` });
+
   await page.locator('.start-btn').tap();
   await page.waitForTimeout(500);
-  check((await ledPosition(page)) !== -1, 'phone: START answers right after scrolling');
+  check((await ledPosition(page)) !== -1, 'phone: START answers in the compact header');
   await page.locator('.start-btn').tap();
-  await page.evaluate(() => {
-    document.querySelector('.phone-scroll').scrollTop = 0;
-    document.documentElement.style.removeProperty('--safe-top');
-  });
+
+  await scrollMain(200);
+  check(!(await header()).compact, 'phone: scrolling back up restores the header');
+
+  // At the very end of the page, compacting grows <main> and the browser clamps scrollTop:
+  // the header must settle compact instead of bouncing.
+  await scrollMain(100000);
+  const states = [];
+  for (let i = 0; i < 6; i++) {
+    states.push((await header()).compact);
+    await page.waitForTimeout(80);
+  }
+  check(states.every(Boolean), `phone: at the bottom the header settles compact (${states.join(',')})`);
+
+  await scrollMain(0);
+  check(!(await header()).compact, 'phone: back at the top the header is full size');
+  await page.evaluate(() => document.documentElement.style.removeProperty('--safe-top'));
 
   await page.locator('.chip .strip__plate', { hasText: 'SNARE' }).tap();
   check((await page.textContent('.card .section-label')).includes('SNARE'), 'phone: tapping a plate selects the snare');
