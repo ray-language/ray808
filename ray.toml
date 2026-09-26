@@ -1,6 +1,9 @@
 [package]
 name = "ray808"
 version = "0.1.0"
+# 1.27.13: Option/Result equality in the tests, literal patterns in `match`, HOME on Android,
+# and the Info.plist keys of `[app.plist]` in `ray bundle --ios`.
+raylang = "1.27.13"
 
 [dependencies]
 web = "^0.4.4"
@@ -20,3 +23,8 @@ name = "Ray808"
 id = "org.raylang.ray808"
 icon = "assets/icon.png"
 copyright = "© 2026 Rayala · 808 samples by Michael Fischer (1994)"
+
+# Extra Info.plist keys, for the macOS `.app` and (since raylang 1.27.13) the iOS shell. The
+# local-network prompt is what lets the iPhone reach the Mac's Vite (`make dev-device`).
+[app.plist]
+NSLocalNetworkUsageDescription = "Ray808 connects to the Vite dev server on your computer while you develop the app (hot reload)."
