@@ -91,10 +91,18 @@ body:has(.machine--phone) {
 .machine--phone::before,
 .machine--phone::after { display: none; }
 
+/* The header floats over <main> instead of pushing it: <main> reserves the full header's
+   height (--header-h, measured by useCompactOnScroll) at its top, so the header can
+   shrink or grow without moving the content — it only uncovers or covers it. */
+.machine--phone { position: relative; }
+
 .phone-header {
-  flex: none;
-  position: relative;
+  position: absolute;
+  top: var(--safe-top);
+  left: calc(10px + env(safe-area-inset-left));
+  right: calc(10px + env(safe-area-inset-right));
   z-index: 20;
+  background: var(--chassis);
   box-shadow: 0 10px 12px -8px rgba(0 0 0 / 0.8);
 }
 
@@ -107,7 +115,7 @@ body:has(.machine--phone) {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 0 calc(18px + env(safe-area-inset-bottom));
+  padding: calc(var(--header-h, 157px) + 10px) 0 calc(18px + env(safe-area-inset-bottom));
 }
 
 

@@ -148,9 +148,21 @@ const ledPosition = (page) =>
   check(!full.compact && full.top >= 59, `phone: the header starts full size below the status bar (top ${full.top}px, ${full.height}px tall)`);
   check(full.page <= 0, 'phone: the page itself never scrolls, only <main>');
 
-  await scrollMain(300);
+  // Where a piece of content sits on screen; it must not move when the header resizes.
+  const contentY = () => page.evaluate(() => Math.round(document.querySelector('.phone-scroll .card:nth-of-type(2)').getBoundingClientRect().top));
+  const setMain = (y) => page.evaluate((v) => (document.querySelector('.phone-scroll').scrollTop = v), y);
+
+  await scrollMain(40);
+  check(!(await header()).compact, 'phone: a short scroll, before the content reaches the header edge, keeps it full');
+
+  await setMain(300);
+  await page.waitForTimeout(30);
+  const y0 = await contentY();
+  await page.waitForTimeout(350);
   const small = await header();
+  const y1 = await contentY();
   check(small.compact && small.height < full.height - 40 && small.start < full.start, `phone: scrolling down compacts the header (${full.height} → ${small.height}px, START ${full.start} → ${small.start}px)`);
+  check(y0 === y1, `phone: the content does not jump while the header compacts (${y0} → ${y1}px)`);
   check(small.top >= 59, `phone: the compact header stays below the status bar (top ${small.top}px)`);
   await page.screenshot({ path: `${OUT}/phone-compact.png` });
 
@@ -159,11 +171,14 @@ const ledPosition = (page) =>
   check((await ledPosition(page)) !== -1, 'phone: START answers in the compact header');
   await page.locator('.start-btn').tap();
 
-  await scrollMain(200);
+  await setMain(260);
+  await page.waitForTimeout(30);
+  const y2 = await contentY();
+  await page.waitForTimeout(350);
+  const y3 = await contentY();
   check(!(await header()).compact, 'phone: scrolling back up restores the header');
+  check(y2 === y3, `phone: the content does not jump while the header expands (${y2} → ${y3}px)`);
 
-  // At the very end of the page, compacting grows <main> and the browser clamps scrollTop:
-  // the header must settle compact instead of bouncing.
   await scrollMain(100000);
   const states = [];
   for (let i = 0; i < 6; i++) {

@@ -1,53 +1,87 @@
-import { useCallback, useRef, useState, type UIEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject, type UIEvent } from 'react';
 
 /** Distance a swipe must travel in one direction before the header changes. */
 const THRESHOLD = 12;
-/** Near the top the header is always full size. */
-const TOP_ZONE = 8;
-/** How long the header takes to change size (keep in sync with phone.css). */
-const TRANSITION_MS = 220;
 
 /**
- * The phone header's compact mode, driven by the scroll direction of <main>: swiping the
- * content up (reading further down) compacts the header, swiping it down brings it back,
- * and at the top it is always full size.
+ * The phone header's compact mode, driven by <main>'s scroll.
  *
- * Changing the header's height resizes <main>. At the end of the page that makes the
- * browser clamp scrollTop, which looks like a scroll back up and would bounce the header
- * open and shut: scroll events are ignored while the header animates, and a scroll that
- * only follows the clamp at the bottom never expands it.
+ * The header floats over <main> (it does not push it), and <main> reserves the FULL
+ * header's height at its top: resizing the header never moves the content, it only
+ * uncovers or covers what lies beneath. The header compacts on a swipe up only once the
+ * content has scrolled up to the compact header's edge (scrollTop ≥ full − compact
+ * height), so no gap ever opens above the content; below that point it is always full.
+ * A swipe down restores it.
+ *
+ * It also publishes the full header's height as `--header-h` on `root` (the padding
+ * <main> reserves), measured while the header is full.
  */
-export function useCompactOnScroll() {
+export function useCompactOnScroll(
+  header: RefObject<HTMLElement | null>,
+  root: RefObject<HTMLElement | null>,
+  /** Whether the phone header is mounted (it is not while the app boots, or on desktop). */
+  mounted: boolean,
+) {
   const [compact, setCompact] = useState(false);
   const last = useRef(0);
   const travel = useRef(0);
-  const settleUntil = useRef(0);
+  // full = 0 until measured; compact defaults to the CSS's compact size.
+  const heights = useRef({ full: 0, compact: 48 });
 
-  const toggle = useCallback((next: boolean) => {
-    settleUntil.current = performance.now() + TRANSITION_MS + 60;
-    travel.current = 0;
-    setCompact(next);
-  }, []);
+  useEffect(() => {
+    const el = header.current;
+    if (!mounted || !el) return;
+    const publish = (h: number) => {
+      heights.current.full = h;
+      root.current?.style.setProperty('--header-h', `${Math.round(h)}px`);
+    };
+    const ro = new ResizeObserver(() => {
+      const h = el.getBoundingClientRect().height;
+      if (el.classList.contains('phone-header--compact')) {
+        heights.current.compact = Math.min(heights.current.compact, h);
+      } else if (h > heights.current.full) {
+        // Only ever grows: while the header animates back from compact it passes through
+        // smaller heights, and following them would move the content.
+        publish(h);
+      }
+    });
+    ro.observe(el);
+    // A rotation or a resize may legitimately change the full height: measure afresh.
+    const onResize = () => {
+      if (!el.classList.contains('phone-header--compact')) publish(el.getBoundingClientRect().height);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', onResize);
+    };
+  }, [header, root, mounted]);
 
   const onScroll = useCallback(
     (e: UIEvent<HTMLElement>) => {
-      const el = e.currentTarget;
-      const top = el.scrollTop;
+      const top = e.currentTarget.scrollTop;
       const delta = top - last.current;
       last.current = top;
-      if (performance.now() < settleUntil.current) return;
+      const collapseAt = Math.max(0, heights.current.full - heights.current.compact);
 
-      if (top <= TOP_ZONE) {
-        if (compact) toggle(false);
+      if (top < collapseAt) {
+        // The content has not reached the compact header's edge: compacting now would
+        // open a gap above it.
+        travel.current = 0;
+        if (compact) setCompact(false);
         return;
       }
-      const atBottom = top + el.clientHeight >= el.scrollHeight - 2;
       // Accumulate travel in one direction; a change of direction starts over.
       travel.current = Math.sign(delta) === Math.sign(travel.current) ? travel.current + delta : delta;
-      if (!compact && travel.current > THRESHOLD) toggle(true);
-      else if (compact && travel.current < -THRESHOLD && !atBottom) toggle(false);
+      if (!compact && travel.current > THRESHOLD) {
+        travel.current = 0;
+        setCompact(true);
+      } else if (compact && travel.current < -THRESHOLD) {
+        travel.current = 0;
+        setCompact(false);
+      }
     },
-    [compact, toggle],
+    [compact],
   );
 
   return { compact, onScroll };

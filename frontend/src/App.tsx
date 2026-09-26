@@ -60,7 +60,9 @@ export default function App() {
   const [custom, setCustom] = useState(new Map<VoiceId, string>());
   const [samplesOpen, setSamplesOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const header = useCompactOnScroll();
+  const phoneRoot = useRef<HTMLDivElement>(null);
+  const phoneHeader = useRef<HTMLDivElement>(null);
+  const header = useCompactOnScroll(phoneHeader, phoneRoot, phone && state !== null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessageText] = useState('');
   const msgTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -456,11 +458,12 @@ export default function App() {
 
   if (phone) {
     return (
-      <div className="machine machine--phone">
+      <div className="machine machine--phone" ref={phoneRoot}>
         {/* The header never scrolls: on iOS the first touch on a view that is still
             coasting only stops it, so a START/STOP inside the scrolling page would swallow
-            the tap. Only <main> below scrolls. */}
-        <div className={`phone-header${header.compact ? ' phone-header--compact' : ''}`}>
+            the tap. It floats over <main>, which is the only scrolling element; see
+            useCompactOnScroll for how it compacts without moving the content. */}
+        <div ref={phoneHeader} className={`phone-header${header.compact ? ' phone-header--compact' : ''}`}>
           <header className="brand">
             {brand}
             <button className="menu-btn" aria-label="Menu" onClick={() => setSheetOpen(true)}>
