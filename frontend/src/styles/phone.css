@@ -58,6 +58,12 @@
  * instrument plates that scrolls sideways with the selected instrument's knobs below,
  * and finally tempo and pattern memory. */
 
+:root {
+  /* The status bar / camera area the page must not draw under. iOS reports it through
+     env(); the Android shell does not, so it is set by hand further down. */
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
 body:has(.machine--phone) {
   padding: 0;
   background: var(--chassis);
@@ -67,15 +73,31 @@ body:has(.machine--phone) {
   width: 100%;
   min-height: 100dvh;
   border-radius: 0;
-  padding: env(safe-area-inset-top) calc(10px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom))
+  padding: var(--safe-top) calc(10px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom))
     calc(10px + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 10px;
   box-shadow: none;
 }
-.machine--phone::before,
 .machine--phone::after { display: none; }
+
+/* An opaque band over the status bar: what scrolls up passes under it, never behind the
+   clock, the battery or the camera. */
+.machine--phone::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: auto;
+  height: var(--safe-top);
+  z-index: 30;
+  border-radius: 0;
+  background: var(--chassis);
+  box-shadow: none;
+}
 
 .machine--phone .brand {
   flex-wrap: nowrap;
@@ -101,13 +123,14 @@ body:has(.machine--phone) {
 
 .topbar {
   position: sticky;
-  top: 0;
+  top: var(--safe-top); /* pinned just below the status bar, not under it */
   z-index: 20;
   display: grid;
   grid-template-columns: 1fr 150px;
   gap: 10px;
   padding: 8px 0;
-  background: linear-gradient(var(--chassis) 85%, transparent);
+  background: var(--chassis);
+  box-shadow: 0 10px 12px -8px rgba(0 0 0 / 0.8);
 }
 .topbar .display { min-height: 0; padding: 8px 10px; }
 .topbar .display__bpm { font-size: 26px; }
@@ -195,7 +218,7 @@ body:has(.machine--phone) {
 /* Sample bank: a full-screen sheet */
 .machine--phone .sample-panel {
   width: 100%;
-  padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+  padding: calc(14px + var(--safe-top)) 14px calc(14px + env(safe-area-inset-bottom));
 }
 .machine--phone .sample-row { padding: 10px; }
 .machine--phone .sample-row .mini-btn { font-size: 10px; padding: 8px 10px; }
@@ -215,9 +238,6 @@ button,
 /* The Android shell draws the WebView edge to edge but reports no safe-area insets:
    leave room for the status bar and the gesture bar ourselves (App sets data-platform
    from the backend's hello). */
-html[data-platform='android'] .machine--phone {
-  padding-top: 30px;
-  padding-bottom: 28px;
-}
+html[data-platform='android'] { --safe-top: 30px; }
+html[data-platform='android'] .machine--phone { padding-bottom: 28px; }
 html[data-platform='android'] .sheet-backdrop { padding-bottom: 40px; }
-html[data-platform='android'] .machine--phone .sample-panel { padding-top: 40px; }

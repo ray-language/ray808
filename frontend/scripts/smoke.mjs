@@ -123,6 +123,24 @@ const ledPosition = (page) =>
   const stepBox = await page.locator('.step__btn').first().boundingBox();
   check(stepBox.width >= 38 && stepBox.height >= 44, `phone: step buttons are thumb-sized (${Math.round(stepBox.width)}×${Math.round(stepBox.height)})`);
 
+  // A notched iPhone: Chrome reports no safe area, so set the inset the page reads, scroll,
+  // and check the pinned bar stays below it with the opaque band over the status bar.
+  await page.evaluate(() => document.documentElement.style.setProperty('--safe-top', '59px'));
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await page.waitForTimeout(100);
+  const pinned = await page.evaluate(() => {
+    const bar = document.querySelector('.topbar').getBoundingClientRect();
+    const band = getComputedStyle(document.querySelector('.machine--phone'), '::before');
+    return { top: Math.round(bar.top), band: band.height, bg: band.backgroundColor };
+  });
+  check(pinned.top === 59, `phone: scrolled, START/STOP stays below the status bar (top ${pinned.top}px)`);
+  check(pinned.band === '59px' && pinned.bg !== 'rgba(0, 0, 0, 0)', `phone: an opaque band covers the status bar (${pinned.band})`);
+  await page.screenshot({ path: `${OUT}/phone-scrolled-notch.png` });
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.style.removeProperty('--safe-top');
+  });
+
   await page.locator('.chip .strip__plate', { hasText: 'SNARE' }).tap();
   check((await page.textContent('.card .section-label')).includes('SNARE'), 'phone: tapping a plate selects the snare');
   check((await page.locator('.strip--focus .knob').count()) === 3, 'phone: the snare editor shows its 3 knobs');
