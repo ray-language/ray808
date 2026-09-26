@@ -15,6 +15,7 @@ import std/json;
 import std/base64;
 import std/fs;
 import store;
+import frontend;
 
 /// Native file dialogs, or none (mobile, where the page falls back to the browser).
 pub struct Dialogs {
@@ -102,7 +103,9 @@ fn dispatch(dir: string, body: string, dialogs: Dialogs) -> Result<string, strin
                 [
                     ("platform", json.Json.JStr(platform())),
                     ("dialogs", json.Json.JBool(dialogs.available)),
-                    ("dir", json.Json.JStr(dir))
+                    ("dir", json.Json.JStr(dir)),
+                    // Development only: the dev server the page moves to once it answers.
+                    ("devUrl", json.Json.JStr(frontend.dev_url().unwrap_or("")))
                 ]
             )
         );

@@ -122,8 +122,18 @@ que corre en el teléfono.
    La primera vez iOS pide permiso de red local.
 3. Edita cualquier componente o CSS: el iPhone se actualiza al guardar.
 
-Si el dev server no responde en 1,5 s, la app avisa en la consola y carga la build embebida:
-nunca queda en blanco. Sin la variable (o desactivada) se comporta como siempre. El hot reload
+Si el dev server no responde al arrancar (lo típico la primera vez: iOS aún está pidiendo el
+permiso de red local y esas conexiones fallan), la app carga la build embebida, el display
+muestra «WAITING FOR <ip>:5173…» y la página sigue llamando al dev server cada 1,5 s durante
+2 minutos: en cuanto aceptas el permiso o arrancas Vite, salta sola a él. Nunca queda en
+blanco.
+
+El `Info.plist` del shell iOS generado no trae `NSLocalNetworkUsageDescription` (y el
+`[app.plist]` del `ray.toml` no se aplica a `--ios`): añádelo a `Ray808-ios/Shell/Info.plist`
+para que iOS muestre el aviso de red local:
+```bash
+plutil -insert NSLocalNetworkUsageDescription -string "Ray808 connects to the Vite dev server on your computer while you develop the app (hot reload)." Ray808-ios/Shell/Info.plist
+``` Sin la variable (o desactivada) se comporta como siempre. El hot reload
 cubre el frontend; un cambio en `src/*.ray` sigue pidiendo recompilar la librería (abajo) e
 instalar de nuevo.
 

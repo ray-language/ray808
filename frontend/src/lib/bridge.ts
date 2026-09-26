@@ -46,13 +46,15 @@ export async function call(op: string, args: Record<string, unknown> = {}): Prom
 export interface Hello {
   platform: string;
   dialogs: boolean;
+  /** Development: a dev server the page should move to (RAY808_DEV_URL), or "". */
+  devUrl: string;
 }
 
 /** What the backend says about the platform; null outside the app. */
 export async function hello(): Promise<Hello | null> {
   const r = await call('hello');
   if (!r.ok) return null;
-  return { platform: String(r.platform ?? ''), dialogs: r.dialogs === true };
+  return { platform: String(r.platform ?? ''), dialogs: r.dialogs === true, devUrl: String(r.devUrl ?? '') };
 }
 
 /* ---------- base64 for the byte payloads ---------- */

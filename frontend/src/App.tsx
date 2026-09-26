@@ -21,6 +21,7 @@ import {
   type VariationMode,
 } from './machine/pattern';
 import { hello } from './lib/bridge';
+import { followDevServer } from './lib/devServer';
 import { exportFile, importJsonText } from './lib/files';
 import { clearState, deleteUserSample, loadState, loadUserSamples, saveState, saveUserSample } from './lib/storage';
 import { useCompactOnScroll } from './lib/useCompactOnScroll';
@@ -92,12 +93,16 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
+    let stopDevWatch = () => {};
     (async () => {
       const [loaded, info] = await Promise.all([loadState(), hello()]);
       if (!alive) return;
       setState(loaded);
       engine.volume = loaded.volume;
-      if (info) document.documentElement.dataset.platform = info.platform;
+      if (info) {
+        document.documentElement.dataset.platform = info.platform;
+        stopDevWatch = followDevServer(info.devUrl, (msg) => message_(msg, true));
+      }
       message_('LOADING SAMPLES…', true);
       const { failed } = await engine.loadFactorySamples((done, total) => {
         if (done % 20 === 0 || done === total) message_(`LOADING ${done}/${total}`, true);
@@ -125,6 +130,7 @@ export default function App() {
     document.addEventListener('keydown', wake);
     return () => {
       alive = false;
+      stopDevWatch();
       document.removeEventListener('pointerdown', wake);
       document.removeEventListener('keydown', wake);
     };
