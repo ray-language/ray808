@@ -69,7 +69,7 @@ El panel de escritorio (12 columnas de knobs) es inservible en 390 px, así que 
 │  main.ray      ventana (std/ui), bucle de eventos, menú About        │
 │  api.ray       protocolo: hello, state.*, sample.*, export, import   │
 │  store.ray     archivos: state.json, samples/<VOZ>.bin|.name, exports│
-│  frontend.ray  servidor local: web.static_embedded + web.listen_local│
+│  frontend.ray  la página: ui.mount_embed(frontend/dist) → ray://app/… │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,10 +84,14 @@ El panel de escritorio (12 columnas de knobs) es inservible en 390 px, así que 
   la app, `$HOME/Ray808/` = `/data/data/org.raylang.ray808/files/Ray808/` (el shell fija `HOME`
   desde raylang 1.27.13). Cada escritura va a un temporal y se
   renombra (atómica). Los ids de voz se validan contra las 16 del 808 antes de tocar una ruta.
-- **Servidor local cerrado a la ventana**: los shells de iOS y Android cargan la URL que se les
-  da y no atienden `ray://app`, así que la página se sirve siempre desde `127.0.0.1` con
-  `web.listen_local`: token de 128 bits por arranque (`?ray_token=` y luego cookie) y guarda
-  cross-site. Sin el token, cualquier otro proceso o página web recibe 403.
+- **Sin servidor local**: la página va embebida en el binario y el propio proceso la sirve por
+  `ray://app/…` (el esquema de `std/ui`), en las cinco plataformas: ni puerto ni token. Los
+  shells de iOS y Android lo atienden desde raylang 1.27.17 (Android por el alias
+  `https://app.ray.invalid/…`); hasta 1.27.15 la app llevaba un servidor en `127.0.0.1` cerrado
+  con `web.listen_local`, y por eso ya no depende de los paquetes `web` ni `net`. Ojo:
+  `ui.mount_embed("", "frontend/dist")` deja los archivos en `ray://app/frontend/dist/…` (la
+  clave del embed entera), así que la página se abre con esa ruta; Vite construye con
+  `base: './'` y todos los assets son relativos.
 - **Fuera de la app** (un navegador con `npm run dev`) no hay `window.ray` y la página cae a
   `localStorage`, IndexedDB y descargas: el frontend sigue siendo una web completa.
 
@@ -145,8 +149,8 @@ vive `RAY808_DEV_URL`: `make bundle-ios` guarda `xcshareddata/` antes y lo repon
 
 **Alternativa de raylang (1.27.13): `RAY_DEV_FRONTEND_URL`.** Una librería compilada con
 `--devtools` (`ray build --native --lib --devtools …`, sin `--release`) honra esa variable si el
-dev server responde al arrancar y, si no, usa la build embebida; `ui.app_url` cambia entonces el
-origen del servidor local por el de Vite. En el simulador funciona igual que `RAY808_DEV_URL`
+dev server responde al arrancar y, si no, usa la build embebida; `ui.app_url` resuelve entonces
+`app://index.html` en el de Vite. En el simulador funciona igual que `RAY808_DEV_URL`
 (página desde Vite, `window.ray` hablando con el programa del teléfono, respaldo con Vite
 apagado). Ray808 se queda con `RAY808_DEV_URL` porque raylang decide una sola vez, al arrancar: la
 primera vez que iOS pide el permiso de red local (y esas conexiones fallan) se quedaría en la
@@ -195,10 +199,10 @@ xcconfig (el Team ID no va al `ray.toml` de un repo público). El icono sale de
 |---|---|
 | Backend raylang | `ray test` y `ray test --native`: 15 tests (estado, samples, exportación, diálogos cancelados, rutas hostiles, directorio de datos, URLs del dev server) |
 | Frontend | `npm run build` (TypeScript estricto) + `npm run smoke`: 20 comprobaciones en Chrome headless, escritorio 1440×960 y teléfono 390×844 táctil (carga de los 116 samples, LED corredizo, knobs, pasos, patrones, guardado por el puente, sin scroll lateral, hoja de acciones, banco de sonidos, diálogo de RESET) |
-| Programa completo | `ray run` headless: el servidor local da 200 con token, 403 sin token y 403 cross-site |
+| Programa completo | `ray run` headless (`RAY_UI_TRACE=1`): monta `frontend/dist` y abre `ray://app/frontend/dist/index.html`; bajo `ray dev`, la URL de Vite |
 | macOS | `ray bundle` → `Ray808.app` (16 MB) sirviendo los assets embebidos con `cwd=/` |
-| iOS | simulador iPhone 16 Pro: arranca, carga los samples y responde por el puente en < 3 s (un `state.json` sembrado aparece en el display); con raylang 1.27.13 también con `RAY_DEV_FRONTEND_URL`, con Vite encendido y apagado |
-| Android | emulador arm64: arranca, y un paso tocado con `adb` queda en `state.json` del backend y sobrevive al reinicio; con raylang 1.27.13 el estado vive bajo el `HOME` que fija el shell, y CARGAR JSON abre el selector de archivos del sistema e importa el archivo elegido |
+| iOS | simulador iPhone 16 Pro: arranca, carga los samples y responde por el puente en < 3 s (un `state.json` sembrado aparece en el display); con raylang 1.27.13 también con `RAY_DEV_FRONTEND_URL`, con Vite encendido y apagado. Con raylang 1.27.17 (proyecto regenerado con `ray bundle --ios --ios-target sim`): la página llega por `ray://app/frontend/dist/index.html`, sin servidor local; el esquema compartido, la firma y la librería de dispositivo sobreviven a la regeneración |
+| Android | emulador arm64: arranca, y un paso tocado con `adb` queda en `state.json` del backend y sobrevive al reinicio; con raylang 1.27.13 el estado vive bajo el `HOME` que fija el shell, y CARGAR JSON abre el selector de archivos del sistema e importa el archivo elegido. Con raylang 1.27.17 (proyecto regenerado con `ray bundle --android`): la página llega por el alias `https://app.ray.invalid/frontend/dist/index.html`, y un toque en un paso reescribe `state.json` por el puente |
 
 Sin verificar en dispositivo real: el sonido en sí (los emuladores no se escucharon), y en
 iOS el interruptor de silencio, que también silencia Web Audio.
@@ -214,7 +218,10 @@ iOS el interruptor de silencio, que también silencia Web Audio.
 ## Hallazgos de dogfood
 
 Hallazgos sobre raylang que salieron de construir la app (propuestos, no escritos en raylang),
-con su estado en raylang 1.27.13:
+con su estado hasta raylang 1.27.17 (28 sep 2026: los que dependen del shell móvil se probaron
+con Ray808 y con una mini app, generadas por `ray bundle --ios`/`--android`, en el simulador
+de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica como
+`1.27.17+dev.d06b288e.dirty`, no como la release):
 
 1. **`ui.reply` no resuelve la Promise en los shells móviles.** iOS y Android entregan los
    mensajes de la página con `window = 0` (el shell no conoce el handle), pero
@@ -224,20 +231,34 @@ con su estado en raylang 1.27.13:
    shell» en `eval_js`/`reply`, o que el shell entregue el handle real. **1.27.13: sigue roto
    en nativo**: el CHANGELOG lo da por resuelto, pero en el simulador, sin el rodeo, cada
    respuesta falla con `ray808: reply: ui: not an open window` y el estado guardado no llega a
-   la página. El rodeo se queda.
+   la página. El rodeo se queda. **Resuelto en 1.27.17** (shell regenerado): en el simulador,
+   `ui.reply(0, id, …)` devuelve `Ok` y la Promise de la página se resuelve. Ray808 conserva el
+   rodeo mientras sus proyectos generados no se regeneren: con un shell anterior a 1.27.17
+   sigue haciendo falta.
 2. **Los shells móviles no atienden `ray://app`**: la plantilla de `ray new --frontend` abre
    `app://index.html` (→ `ray://app/…` fuera de `ray dev`), que en iOS/Android no carga. Una
    app móvil necesita el servidor local; la documentación de M263 no lo dice. **1.27.13:
-   documentado** en el MANUAL; los shells siguen sin servir el esquema.
+   documentado** en el MANUAL; los shells siguen sin servir el esquema. **Resuelto en 1.27.17**
+   para iOS (verificado: una página montada con `ui.mount_bytes` y abierta como
+   `ray://app/index.html` carga en el simulador y su `window.ray` funciona; el shell además
+   emite un evento `lifecycle` con `tag = foreground`). Verificado también en el emulador
+   Android (la página llega por el alias `https://app.ray.invalid/…`), aunque `ray doc
+   ui.mount_dir` sigue diciendo «three desktop backends». **Adoptado**: `frontend.ray` monta
+   `frontend/dist` con `ui.mount_embed` y la app ya no lleva servidor local ni los paquetes
+   `web`/`net`; ver el hallazgo 11 por la ruta que hay que abrir.
 3. **Android no da un directorio de datos**: el shell no define `HOME` y corre con `cwd=/`.
    La app deducía `/data/data/<paquete>/files` de `/proc/self/cmdline`. **Resuelto en
    1.27.13**: el shell fija `HOME`/`TMPDIR` y `store.ray` usa `$HOME/Ray808`.
 4. **Android: sin `onShowFileChooser`** en el `WebChromeClient` del shell → `<input
    type="file">` no hacía nada. **Resuelto en 1.27.13.**
 5. **`ray add` coloca la dependencia debajo del comentario de la sección siguiente** (el de
-   `[frontend]` que genera `ray new --frontend`), separándolo de su tabla.
+   `[frontend]` que genera `ray new --frontend`), separándolo de su tabla. **Resuelto en
+   1.27.13**; comprobado de nuevo con 1.27.17 (`ray new --frontend react-ts` + `ray add web`
+   deja `web = "^0.4.5"` bajo `[dependencies]`). Nota: ese `ray add web` descarga net 0.3.6,
+   la versión que fija el `ray.toml` de web 0.4.5, aunque el índice ya tiene net 0.5.0.
 6. **`ray fmt`** junta en una línea un literal de struct cuyos campos son closures (ilegible) y
-   no parte una constante de arreglo de 122 columnas.
+   no parte una constante de arreglo de 122 columnas. **Resuelto en 1.27.13**; con 1.27.17 pone
+   un campo por línea en el literal y reparte `VOICES` de `store.ray` (ya formateado así).
 7. **`assert_eq` sobre `Option`/`Result` no compilaba** (`Option<int> does not implement
    'Eq'`). **Resuelto en 1.27.13**: los tests comparan `Option`/`Result` directamente.
 8. `match` no aceptaba patrones literales de string (`"hello" => …`). **Resuelto en 1.27.13**:
@@ -246,9 +267,35 @@ con su estado en raylang 1.27.13:
    `Ray808.xcodeproj` entero, así que `xcshareddata/xcschemes/Ray808.xcscheme` — donde vive
    `RAY808_DEV_URL` — desaparece. Los ids del pbxproj son fijos, así que `make bundle-ios` lo
    guarda y lo repone. Propuesta: preservar `xcshareddata/` (y `xcuserdata/`) al regenerar, como
-   ya se preservan la firma y las librerías.
+   ya se preservan la firma y las librerías. **Resuelto en 1.27.15** (el bundle conserva
+   `xcshareddata/` y `xcuserdata/`); `make bundle-ios` mantiene la copia de respaldo por si
+   acaso.
 10. **`ray fmt` saca de la lista un comentario sobre su último elemento** (1.27.13): un
    `// …` justo antes del último elemento de un literal de arreglo acaba después del `]`.
+   **Sigue en 1.27.17**: `[0, 10, // the last one\n 25]` → `[0, 10, 25]` y el comentario tras
+   el `]`, también con un arreglo que no cabe en una línea (`ray fmt` CLI y `ray_fmt` MCP).
+   Ray808 no tiene comentarios dentro de arreglos.
+11. **`ui.mount_embed("", "frontend/dist")` no deja la página en `ray://app/index.html`** (1.27.17):
+   conserva la clave del embed entera, así que `index.html` queda en
+   `ray://app/frontend/dist/index.html` (como dice `ray doc ui.mount_embed`: `assets/app.css` →
+   `ray://app/assets/app.css`). Pero la plantilla de `ray new --frontend` hace justo
+   `mount_embed("", "frontend/dist")` y abre `app://index.html`, que da «not found» en el
+   simulador iOS y en el emulador Android (comprobado con Ray808 y con una mini app: `/index.html`
+   → 404, `/www/index.html` → 200 con `mount_embed("", "www")`). Ray808 abre la ruta con prefijo
+   fuera de `ray dev` (`frontend.ray`), y funciona porque Vite construye con `base: './'`.
+   Propuesta: que `mount_embed` recorte `embed_prefix` (o que la plantilla abra
+   `app://frontend/dist/index.html` y `ui.app_url` lo resuelva a la raíz de Vite).
+12. **Android inyecta `window.ray` en `onPageStarted`, tarde para una página servida por
+   `ray://app`** (1.27.17): el shell la evalúa con `evaluateJavascript` al empezar la carga, y
+   una página servida desde memoria ejecuta su `<script>` antes: `Uncaught TypeError: Cannot
+   read properties of undefined (reading 'send')` (mini app; con el servidor HTTP local nunca
+   pasó). Ray808 no lo sufre porque su React consulta `window.ray` más tarde, en el arranque de
+   la app. Propuesta: `WebViewCompat.addDocumentStartJavaScript` (androidx.webkit), que corre
+   antes de cualquier script de la página, como el user script de WKWebView.
+13. **Quitar la última dependencia deja `ray.lock` y `.ray-deps/` como estaban** (1.27.17): tras
+   borrar `[dependencies]` del `ray.toml`, `ray check`/`ray fetch`/`ray update` responden
+   «declares no dependencies» y no tocan el lock, y `ray remove web` se niega porque «is not
+   declared». Hubo que borrar `ray.lock` a mano.
 
 ## Créditos y licencia de los samples
 

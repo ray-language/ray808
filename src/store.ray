@@ -14,7 +14,24 @@ import std/fs;
 import std/json;
 
 /// The 16 voices of the TR-808 (the only names a sample file can take).
-const VOICES: [string] = ["BD", "SD", "LT", "LC", "MT", "MC", "HT", "HC", "RS", "CL", "CP", "MA", "CB", "CY", "OH", "CH"];
+const VOICES: [string] = [
+    "BD",
+    "SD",
+    "LT",
+    "LC",
+    "MT",
+    "MC",
+    "HT",
+    "HC",
+    "RS",
+    "CL",
+    "CP",
+    "MA",
+    "CB",
+    "CY",
+    "OH",
+    "CH"
+];
 
 /// Largest user sample accepted (bytes of the decoded upload).
 pub const MAX_SAMPLE_BYTES: int = 16777216;
