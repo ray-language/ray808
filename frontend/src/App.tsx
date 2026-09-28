@@ -120,19 +120,22 @@ export default function App() {
       }
       if (alive) setCustom(names);
     })();
-    // Browsers and webviews only let the AudioContext sound after a gesture.
-    const wake = () => {
-      engine.ensureContext();
-      document.removeEventListener('pointerdown', wake);
-      document.removeEventListener('keydown', wake);
+    // Browsers and webviews only let the AudioContext sound after a gesture — and iOS
+    // WebKit only counts the END of a touch (touchend/click), not pointerdown, so the
+    // resume() of a press that acts on pointerdown (START) leaves the context suspended.
+    // Keep resuming on every kind of gesture until the context really runs.
+    const wakeEvents = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+    const unhook = () => {
+      for (const ev of wakeEvents) document.removeEventListener(ev, wake);
     };
-    document.addEventListener('pointerdown', wake);
-    document.addEventListener('keydown', wake);
+    const wake = () => {
+      if (engine.ensureContext().state === 'running') unhook();
+    };
+    for (const ev of wakeEvents) document.addEventListener(ev, wake);
     return () => {
       alive = false;
       stopDevWatch();
-      document.removeEventListener('pointerdown', wake);
-      document.removeEventListener('keydown', wake);
+      unhook();
     };
   }, [message_]);
 
