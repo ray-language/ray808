@@ -14,23 +14,18 @@ import std/ui;
 import std/net;
 
 /// The URL the window must open: under `ray dev`, the Vite dev server (via `ui.app_url`);
-/// everywhere else the embedded `frontend/dist`, mounted with `ui.mount_embed`.
-///
-/// `mount_embed("", "frontend/dist")` keeps the embed key whole, so the page lives at
-/// `ray://app/frontend/dist/index.html`, not at `ray://app/index.html` as the `ray new
-/// --frontend` template assumes (verified on the iOS simulator and the Android emulator with
-/// raylang 1.27.17). Vite builds with `base: './'`, so every asset URL is relative and the
-/// prefix costs nothing; nothing is copied into memory.
+/// everywhere else `ray://app/index.html`, with the embedded `frontend/dist` mounted at the
+/// root by `ui.mount_embed_at` (raylang 1.27.17+, M323: `mount_embed` would keep the
+/// `frontend/dist/` prefix in the URL).
 pub fn page_url() -> Result<string, string> {
     let url = ui.app_url("app://index.html");
-    if (!url.starts_with("ray://")) {
-        return Result.Ok(url);  // `ray dev`: the dev server
+    if (url.starts_with("ray://")) {
+        let files = ui.mount_embed_at("", "frontend/dist")?;
+        if (files == 0) {
+            eprint("ray808: no embedded files under frontend/dist (run the frontend build)");
+        }
     }
-    let files = ui.mount_embed("", "frontend/dist")?;
-    if (files == 0) {
-        eprint("ray808: no embedded files under frontend/dist (run the frontend build)");
-    }
-    Result.Ok("ray://app/frontend/dist/index.html")
+    Result.Ok(url)
 }
 
 // ---- Development: the page from a Vite dev server on another machine ----
