@@ -300,6 +300,13 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
    declared». Hubo que borrar `ray.lock` a mano. **Sigue en 1.27.17+dev.d06b288e** (proyecto
    nuevo con `ray add net`, `[dependencies]` borrado a mano: `ray check` compila, `ray.lock` y
    `.ray-deps/net` siguen, `ray remove net` se niega).
+14. **`ray bundle --ios --ios-target sim` conserva una librería de dispositivo que ya no encaja
+   con el shell regenerado** (1.27.17+dev.d06b288e): el shell nuevo llama a
+   `ray_ui_shell_capabilities` (M323), pero `libs/libray_app.a` se «preserva» del proyecto
+   anterior sin ese símbolo, y compilar para un iPhone desde Xcode falla con «Undefined symbol:
+   _ray_ui_shell_capabilities». Remedio: `make ios-lib` (o `ray bundle --ios` para ambos
+   destinos). Propuesta: que el bundle compruebe que la librería preservada exporta lo que el
+   shell generado necesita y avise (o la recompile) cuando no.
 
 ## Créditos y licencia de los samples
 
