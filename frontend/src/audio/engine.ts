@@ -23,6 +23,10 @@ export class Engine {
   userSamples = new Map<VoiceId, UserSample>();
   volume = 0.8;
 
+  /** True once a source has actually played: the audio hardware is open (iOS). */
+  unlocked = false;
+  private silence: AudioBuffer | null = null;
+
   ensureContext(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
@@ -30,6 +34,26 @@ export class Engine {
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
+  }
+
+  /**
+   * Call from inside a user gesture. On iOS a context reports `running` after `resume()`
+   * and still plays nothing until a source is STARTED within a gesture: a one-sample
+   * silent buffer does it, and its `onended` is the proof that sound goes through.
+   */
+  unlock(): AudioContext {
+    const ctx = this.ensureContext();
+    if (this.unlocked) return ctx;
+    this.silence ??= ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = this.silence;
+    src.connect(ctx.destination);
+    src.onended = () => {
+      this.unlocked = true;
+      src.disconnect();
+    };
+    src.start(0);
+    return ctx;
   }
 
   /** Builds the master chain (gain + gentle bus compressor) on any context. */

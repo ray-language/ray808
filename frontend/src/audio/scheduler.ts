@@ -19,6 +19,8 @@ export class Scheduler {
   private step = 0; // global sixteenth counter since START
   private nextTime = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** Removes the statechange listener of a start that is waiting for the clock. */
+  private unwatch: (() => void) | null = null;
   /** Schedules the sounds of a step: (global step, time). */
   onStep: (step: number, time: number) => void = () => {};
   /** Steps already scheduled, so the UI lights the LED on time (rAF). */
@@ -39,6 +41,25 @@ export class Scheduler {
     const ctx = this.getCtx();
     this.playing = true;
     this.step = 0;
+    if (ctx.state === 'running') {
+      this.arm(ctx);
+      return;
+    }
+    // The context is still starting (the first gesture, or iOS after an interruption):
+    // its clock does not move yet. Anchor the first step once it runs, so nothing is
+    // scheduled against a frozen clock and the pattern starts on time when sound arrives.
+    const onState = () => {
+      if (ctx.state !== 'running' || !this.playing) return;
+      this.unwatch?.();
+      this.unwatch = null;
+      this.arm(ctx);
+    };
+    this.unwatch = () => ctx.removeEventListener('statechange', onState);
+    ctx.addEventListener('statechange', onState);
+    void ctx.resume();
+  }
+
+  private arm(ctx: AudioContext): void {
     this.nextTime = ctx.currentTime + 0.06;
     this.timer = setInterval(() => this.tick(), LOOKAHEAD_MS);
     this.tick();
@@ -48,6 +69,8 @@ export class Scheduler {
     this.playing = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.unwatch?.();
+    this.unwatch = null;
     this.drawQueue.length = 0;
   }
 

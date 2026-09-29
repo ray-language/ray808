@@ -120,19 +120,24 @@ export default function App() {
       }
       if (alive) setCustom(names);
     })();
-    // Browsers and webviews only let the AudioContext sound after a gesture.
-    const wake = () => {
-      engine.ensureContext();
-      document.removeEventListener('pointerdown', wake);
-      document.removeEventListener('keydown', wake);
+    // Browsers and webviews only let the AudioContext sound after a gesture — and iOS
+    // WebKit only counts the END of a touch (touchend/click), not pointerdown, so the
+    // resume() of a press that acts on pointerdown (START) leaves the context suspended;
+    // and even once `running`, iOS plays nothing until a source starts inside a gesture.
+    // Keep unlocking on every kind of gesture until sound has actually gone through.
+    const wakeEvents = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+    const unhook = () => {
+      for (const ev of wakeEvents) document.removeEventListener(ev, wake);
     };
-    document.addEventListener('pointerdown', wake);
-    document.addEventListener('keydown', wake);
+    const wake = () => {
+      engine.unlock();
+      if (engine.unlocked) unhook();
+    };
+    for (const ev of wakeEvents) document.addEventListener(ev, wake);
     return () => {
       alive = false;
       stopDevWatch();
-      document.removeEventListener('pointerdown', wake);
-      document.removeEventListener('keydown', wake);
+      unhook();
     };
   }, [message_]);
 
@@ -167,7 +172,7 @@ export default function App() {
   }, [playing]);
 
   const startStop = useCallback(() => {
-    engine.ensureContext();
+    engine.unlock();
     if (sched.playing) {
       sched.stop();
       setPlaying(false);
@@ -183,7 +188,7 @@ export default function App() {
   const activeVoice = (s: MachineState, stripId: StripId): VoiceId | undefined => stripById(stripId).voices?.[s.switches[stripId] ?? 0];
 
   const triggerNow = useCallback((voiceId: VoiceId, knobs: Knobs) => {
-    const ctx = engine.ensureContext();
+    const ctx = engine.unlock();
     if (!engine.master) return;
     triggerVoice(ctx, engine.master.input, engine.buffers, engine.userSamples, voiceId, knobs, ctx.currentTime + 0.001, { chokes: chokes.current });
   }, []);

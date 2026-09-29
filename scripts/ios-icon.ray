@@ -1,0 +1,109 @@
+// Wires the app icon into the Xcode project that `ray bundle --ios` generates.
+//
+// The bundle writes Shell/Assets.xcassets/AppIcon.appiconset/icon_1024.png, but the
+// generated project.pbxproj neither references the asset catalog nor has a Resources build
+// phase, and no build setting names the icon set, so the app installs without an icon
+// (README, finding 15). This adds the three things, idempotently; `make bundle-ios` runs it
+// after every regeneration.
+//
+//   ray run scripts/ios-icon.ray -- [Ray808-ios]
+
+import std/fs;
+
+const FILE_REF: string = "0000000000000000000000F9";
+
+const BUILD_FILE: string = "0000000000000000000000B4";
+
+const PHASE: string = "0000000000000000000000E3";
+
+/// The project.pbxproj under the only .xcodeproj of `root`.
+fn find_pbxproj(root: string) -> Result<string, string> {
+    for entry in fs.list_dir(root)? {
+        if (entry.ends_with(".xcodeproj")) {
+            return Result.Ok("${root}/${entry}/project.pbxproj");
+        }
+    }
+    Result.Err("no .xcodeproj under ${root}")
+}
+
+/// Replaces the first of `anchors` that the text contains, or fails: the bundle writes a
+/// compact one-object-per-line project, and Xcode rewrites it in its sectioned layout the
+/// first time it opens it, so every edit has one anchor per layout.
+fn splice(text: string, anchors: [(string, string)]) -> Result<string, string> {
+    for a in anchors {
+        if (text.contains(a.0)) {
+            return Result.Ok(text.replace(a.0, a.1));
+        }
+    }
+    Result.Err("anchor not found in project.pbxproj: ${anchors[0].0}")
+}
+
+const FRAMEWORKS: string = "0000000000000000000000E1";
+
+const INFO_PLIST: string = "0000000000000000000000F4";
+
+fn wire_project(text: string) -> Result<string, string> {
+    // The three new objects, right after `objects = {` (the same in both layouts).
+    let objects = "\tobjects = {\n"
+        + "\t\t${FILE_REF} /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = \"<group>\"; };\n"
+        + "\t\t${BUILD_FILE} /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ${FILE_REF} /* Assets.xcassets */; };\n"
+        + "\t\t${PHASE} /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (${BUILD_FILE} /* Assets.xcassets in Resources */); runOnlyForDeploymentPostprocessing = 0; };\n";
+    var t = splice(text, [("\tobjects = {\n", objects)])?;
+    // The Resources phase after Frameworks in the target's buildPhases.
+    t = splice(
+        t,
+        [
+            ("${FRAMEWORKS})", "${FRAMEWORKS}, ${PHASE})"),
+            (
+                "\t\t\t\t${FRAMEWORKS} /* Frameworks */,\n",
+                "\t\t\t\t${FRAMEWORKS} /* Frameworks */,\n\t\t\t\t${PHASE} /* Resources */,\n"
+            )
+        ]
+    )?;
+    // The catalog in the Shell group, after Info.plist.
+    t = splice(
+        t,
+        [
+            ("${INFO_PLIST}); path = Shell;", "${INFO_PLIST}, ${FILE_REF}); path = Shell;"),
+            (
+                "\t\t\t\t${INFO_PLIST} /* Info.plist */,\n\t\t\t);\n\t\t\tpath = Shell;",
+                "\t\t\t\t${INFO_PLIST} /* Info.plist */,\n\t\t\t\t${FILE_REF} /* Assets.xcassets */,\n\t\t\t);\n\t\t\tpath = Shell;"
+            )
+        ]
+    )?;
+    Result.Ok(t)
+}
+
+fn run(root: string) -> Result<int, string> {
+    let pbx_path = find_pbxproj(root)?;
+    let pbx = fs.read_file(pbx_path)?;
+    if (pbx.contains(FILE_REF)) {
+        print("${pbx_path}: already wired");
+    } else {
+        fs.write_file(pbx_path, wire_project(pbx)?)?;
+        print("${pbx_path}: asset catalog and Resources phase added");
+    }
+
+    let xcconfig = "${root}/App.xcconfig";
+    let cfg = fs.read_file(xcconfig)?;
+    if (cfg.contains("ASSETCATALOG_COMPILER_APPICON_NAME")) {
+        print("${xcconfig}: already set");
+    } else {
+        let line = "// The icon set of Shell/Assets.xcassets (scripts/ios-icon.ray wires the catalog).\nASSETCATALOG_COMPILER_APPICON_NAME = AppIcon\n";
+        fs.write_file(xcconfig, cfg.trim() + "\n" + line)?;
+        print("${xcconfig}: ASSETCATALOG_COMPILER_APPICON_NAME added");
+    }
+    Result.Ok(0)
+}
+
+fn main() -> int {
+    let a = args();
+    let root = if (a.len() > 0) { a[0] } else { "Ray808-ios" };  // args() has no program name
+    match (run(root)) {
+        Result.Ok(_) => 0,
+        Result.Err(e) => {
+            eprint("ios-icon: " + e);
+            1
+        },
+    }
+}

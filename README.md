@@ -69,7 +69,7 @@ El panel de escritorio (12 columnas de knobs) es inservible en 390 px, así que 
 │  main.ray      ventana (std/ui), bucle de eventos, menú About        │
 │  api.ray       protocolo: hello, state.*, sample.*, export, import   │
 │  store.ray     archivos: state.json, samples/<VOZ>.bin|.name, exports│
-│  frontend.ray  servidor local: web.static_embedded + web.listen_local│
+│  frontend.ray  la página: ui.mount_embed(frontend/dist) → ray://app/… │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,10 +84,13 @@ El panel de escritorio (12 columnas de knobs) es inservible en 390 px, así que 
   la app, `$HOME/Ray808/` = `/data/data/org.raylang.ray808/files/Ray808/` (el shell fija `HOME`
   desde raylang 1.27.13). Cada escritura va a un temporal y se
   renombra (atómica). Los ids de voz se validan contra las 16 del 808 antes de tocar una ruta.
-- **Servidor local cerrado a la ventana**: los shells de iOS y Android cargan la URL que se les
-  da y no atienden `ray://app`, así que la página se sirve siempre desde `127.0.0.1` con
-  `web.listen_local`: token de 128 bits por arranque (`?ray_token=` y luego cookie) y guarda
-  cross-site. Sin el token, cualquier otro proceso o página web recibe 403.
+- **Sin servidor local**: la página va embebida en el binario y el propio proceso la sirve por
+  `ray://app/…` (el esquema de `std/ui`), en las cinco plataformas: ni puerto ni token. Los
+  shells de iOS y Android lo atienden desde raylang 1.27.17 (Android por el alias
+  `https://app.ray.invalid/…`); hasta 1.27.15 la app llevaba un servidor en `127.0.0.1` cerrado
+  con `web.listen_local`, y por eso ya no depende de los paquetes `web` ni `net`. El montaje
+  es `ui.mount_embed_at("", "frontend/dist")` (M323), que deja `index.html` en la raíz de
+  `ray://app/`; `ui.mount_embed` conservaría el prefijo `frontend/dist/` en la URL.
 - **Fuera de la app** (un navegador con `npm run dev`) no hay `window.ray` y la página cae a
   `localStorage`, IndexedDB y descargas: el frontend sigue siendo una web completa.
 
@@ -145,8 +148,8 @@ vive `RAY808_DEV_URL`: `make bundle-ios` guarda `xcshareddata/` antes y lo repon
 
 **Alternativa de raylang (1.27.13): `RAY_DEV_FRONTEND_URL`.** Una librería compilada con
 `--devtools` (`ray build --native --lib --devtools …`, sin `--release`) honra esa variable si el
-dev server responde al arrancar y, si no, usa la build embebida; `ui.app_url` cambia entonces el
-origen del servidor local por el de Vite. En el simulador funciona igual que `RAY808_DEV_URL`
+dev server responde al arrancar y, si no, usa la build embebida; `ui.app_url` resuelve entonces
+`app://index.html` en el de Vite. En el simulador funciona igual que `RAY808_DEV_URL`
 (página desde Vite, `window.ray` hablando con el programa del teléfono, respaldo con Vite
 apagado). Ray808 se queda con `RAY808_DEV_URL` porque raylang decide una sola vez, al arrancar: la
 primera vez que iOS pide el permiso de red local (y esas conexiones fallan) se quedaría en la
@@ -158,6 +161,7 @@ salta a él en cuanto responde; además funciona con la librería `--release` de
 ```bash
 ray bundle                                   # macOS: Ray808.app (icono y About del [app])
 ray bundle --ios                             # proyecto Xcode en Ray808-ios/ (iPhone + simulador)
+make ios-icon                                # el bundle deja el icono fuera del pbxproj (hallazgo 15)
 (cd Ray808-ios && xcodebuild -project Ray808.xcodeproj -target Ray808 \
    -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO)
 ray bundle --android --android-abi arm64     # proyecto Gradle en Ray808-android/
@@ -195,10 +199,10 @@ xcconfig (el Team ID no va al `ray.toml` de un repo público). El icono sale de
 |---|---|
 | Backend raylang | `ray test` y `ray test --native`: 15 tests (estado, samples, exportación, diálogos cancelados, rutas hostiles, directorio de datos, URLs del dev server) |
 | Frontend | `npm run build` (TypeScript estricto) + `npm run smoke`: 20 comprobaciones en Chrome headless, escritorio 1440×960 y teléfono 390×844 táctil (carga de los 116 samples, LED corredizo, knobs, pasos, patrones, guardado por el puente, sin scroll lateral, hoja de acciones, banco de sonidos, diálogo de RESET) |
-| Programa completo | `ray run` headless: el servidor local da 200 con token, 403 sin token y 403 cross-site |
+| Programa completo | `ray run` headless (`RAY_UI_TRACE=1`): monta `frontend/dist` y abre `ray://app/index.html`; bajo `ray dev`, la URL de Vite |
 | macOS | `ray bundle` → `Ray808.app` (16 MB) sirviendo los assets embebidos con `cwd=/` |
-| iOS | simulador iPhone 16 Pro: arranca, carga los samples y responde por el puente en < 3 s (un `state.json` sembrado aparece en el display); con raylang 1.27.13 también con `RAY_DEV_FRONTEND_URL`, con Vite encendido y apagado |
-| Android | emulador arm64: arranca, y un paso tocado con `adb` queda en `state.json` del backend y sobrevive al reinicio; con raylang 1.27.13 el estado vive bajo el `HOME` que fija el shell, y CARGAR JSON abre el selector de archivos del sistema e importa el archivo elegido |
+| iOS | simulador iPhone 16 Pro: arranca, carga los samples y responde por el puente en < 3 s (un `state.json` sembrado aparece en el display); con raylang 1.27.13 también con `RAY_DEV_FRONTEND_URL`, con Vite encendido y apagado. Con raylang 1.27.17 (proyecto regenerado con `ray bundle --ios --ios-target sim`): la página llega por `ray://app/index.html`, sin servidor local; el esquema compartido, la firma y la librería de dispositivo sobreviven a la regeneración |
+| Android | emulador arm64: arranca, y un paso tocado con `adb` queda en `state.json` del backend y sobrevive al reinicio; con raylang 1.27.13 el estado vive bajo el `HOME` que fija el shell, y CARGAR JSON abre el selector de archivos del sistema e importa el archivo elegido. Con raylang 1.27.17 (proyecto regenerado con `ray bundle --android`): la página llega por el alias `https://app.ray.invalid/index.html`, y un toque en un paso reescribe `state.json` por el puente |
 
 Sin verificar en dispositivo real: el sonido en sí (los emuladores no se escucharon), y en
 iOS el interruptor de silencio, que también silencia Web Audio.
@@ -209,12 +213,16 @@ iOS el interruptor de silencio, que también silencia Web Audio.
   guardar; el selector de archivos para cargar sí funciona desde raylang 1.27.13).
 - **iOS: el interruptor de silencio silencia la app** (categoría de audio por defecto de
   WKWebView; cambiarla es trabajo del shell).
+- **El sonido se pausa al cambiar de app** (iOS y Android): ver el hallazgo 18.
 - Drag & drop de samples solo en escritorio.
 
 ## Hallazgos de dogfood
 
 Hallazgos sobre raylang que salieron de construir la app (propuestos, no escritos en raylang),
-con su estado en raylang 1.27.13:
+con su estado hasta raylang 1.27.17 (28 sep 2026: los que dependen del shell móvil se probaron
+con Ray808 y con una mini app, generadas por `ray bundle --ios`/`--android`, en el simulador
+de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica como
+`1.27.17+dev.d06b288e.dirty`, no como la release):
 
 1. **`ui.reply` no resuelve la Promise en los shells móviles.** iOS y Android entregan los
    mensajes de la página con `window = 0` (el shell no conoce el handle), pero
@@ -224,20 +232,34 @@ con su estado en raylang 1.27.13:
    shell» en `eval_js`/`reply`, o que el shell entregue el handle real. **1.27.13: sigue roto
    en nativo**: el CHANGELOG lo da por resuelto, pero en el simulador, sin el rodeo, cada
    respuesta falla con `ray808: reply: ui: not an open window` y el estado guardado no llega a
-   la página. El rodeo se queda.
+   la página. El rodeo se queda. **Resuelto en 1.27.17** (shell regenerado): en el simulador,
+   `ui.reply(0, id, …)` devuelve `Ok` y la Promise de la página se resuelve. Ray808 conserva el
+   rodeo mientras sus proyectos generados no se regeneren: con un shell anterior a 1.27.17
+   sigue haciendo falta.
 2. **Los shells móviles no atienden `ray://app`**: la plantilla de `ray new --frontend` abre
    `app://index.html` (→ `ray://app/…` fuera de `ray dev`), que en iOS/Android no carga. Una
    app móvil necesita el servidor local; la documentación de M263 no lo dice. **1.27.13:
-   documentado** en el MANUAL; los shells siguen sin servir el esquema.
+   documentado** en el MANUAL; los shells siguen sin servir el esquema. **Resuelto en 1.27.17**
+   para iOS (verificado: una página montada con `ui.mount_bytes` y abierta como
+   `ray://app/index.html` carga en el simulador y su `window.ray` funciona; el shell además
+   emite un evento `lifecycle` con `tag = foreground`). Verificado también en el emulador
+   Android (la página llega por el alias `https://app.ray.invalid/…`), aunque `ray doc
+   ui.mount_dir` sigue diciendo «three desktop backends». **Adoptado**: `frontend.ray` monta
+   `frontend/dist` con `ui.mount_embed` y la app ya no lleva servidor local ni los paquetes
+   `web`/`net` (`ui.mount_embed_at`, hallazgo 11).
 3. **Android no da un directorio de datos**: el shell no define `HOME` y corre con `cwd=/`.
    La app deducía `/data/data/<paquete>/files` de `/proc/self/cmdline`. **Resuelto en
    1.27.13**: el shell fija `HOME`/`TMPDIR` y `store.ray` usa `$HOME/Ray808`.
 4. **Android: sin `onShowFileChooser`** en el `WebChromeClient` del shell → `<input
    type="file">` no hacía nada. **Resuelto en 1.27.13.**
 5. **`ray add` coloca la dependencia debajo del comentario de la sección siguiente** (el de
-   `[frontend]` que genera `ray new --frontend`), separándolo de su tabla.
+   `[frontend]` que genera `ray new --frontend`), separándolo de su tabla. **Resuelto en
+   1.27.13**; comprobado de nuevo con 1.27.17 (`ray new --frontend react-ts` + `ray add web`
+   deja `web = "^0.4.5"` bajo `[dependencies]`). Nota: ese `ray add web` descarga net 0.3.6,
+   la versión que fija el `ray.toml` de web 0.4.5, aunque el índice ya tiene net 0.5.0.
 6. **`ray fmt`** junta en una línea un literal de struct cuyos campos son closures (ilegible) y
-   no parte una constante de arreglo de 122 columnas.
+   no parte una constante de arreglo de 122 columnas. **Resuelto en 1.27.13**; con 1.27.17 pone
+   un campo por línea en el literal y reparte `VOICES` de `store.ray` (ya formateado así).
 7. **`assert_eq` sobre `Option`/`Result` no compilaba** (`Option<int> does not implement
    'Eq'`). **Resuelto en 1.27.13**: los tests comparan `Option`/`Result` directamente.
 8. `match` no aceptaba patrones literales de string (`"hello" => …`). **Resuelto en 1.27.13**:
@@ -246,9 +268,105 @@ con su estado en raylang 1.27.13:
    `Ray808.xcodeproj` entero, así que `xcshareddata/xcschemes/Ray808.xcscheme` — donde vive
    `RAY808_DEV_URL` — desaparece. Los ids del pbxproj son fijos, así que `make bundle-ios` lo
    guarda y lo repone. Propuesta: preservar `xcshareddata/` (y `xcuserdata/`) al regenerar, como
-   ya se preservan la firma y las librerías.
+   ya se preservan la firma y las librerías. **Resuelto en 1.27.15** (el bundle conserva
+   `xcshareddata/` y `xcuserdata/`); `make bundle-ios` mantiene la copia de respaldo por si
+   acaso.
 10. **`ray fmt` saca de la lista un comentario sobre su último elemento** (1.27.13): un
    `// …` justo antes del último elemento de un literal de arreglo acaba después del `]`.
+   **Sigue en 1.27.17**: `[0, 10, // the last one\n 25]` → `[0, 10, 25]` y el comentario tras
+   el `]`, también con un arreglo que no cabe en una línea (`ray fmt` CLI y `ray_fmt` MCP).
+   Ray808 no tiene comentarios dentro de arreglos.
+11. **`ui.mount_embed("", "frontend/dist")` no deja la página en `ray://app/index.html`** (1.27.17):
+   conserva la clave del embed entera, así que `index.html` queda en
+   `ray://app/frontend/dist/index.html` (como dice `ray doc ui.mount_embed`: `assets/app.css` →
+   `ray://app/assets/app.css`). Pero la plantilla de `ray new --frontend` hace justo
+   `mount_embed("", "frontend/dist")` y abre `app://index.html`, que da «not found» en el
+   simulador iOS y en el emulador Android (comprobado con Ray808 y con una mini app: `/index.html`
+   → 404, `/www/index.html` → 200 con `mount_embed("", "www")`). **Resuelto en
+   1.27.17+dev.d06b288e** (M323): `ui.mount_embed_at(prefix, embed_prefix)` recorta el prefijo
+   (`/index.html` → 200, `/www/index.html` → 404 en el simulador y el emulador), la plantilla
+   de `ray new --frontend` lo usa, `ray doc ui.mount_embed` remite a él, y Ray808 también
+   (`frontend.ray`).
+12. **Android inyecta `window.ray` en `onPageStarted`, tarde para una página servida por
+   `ray://app`** (1.27.17): el shell la evalúa con `evaluateJavascript` al empezar la carga, y
+   una página servida desde memoria ejecuta su `<script>` antes: `Uncaught TypeError: Cannot
+   read properties of undefined (reading 'send')` (mini app; con el servidor HTTP local nunca
+   pasó). Ray808 no lo sufre porque su React consulta `window.ray` más tarde, en el arranque de
+   la app. **Resuelto en 1.27.17+dev.d06b288e**: el shell generado usa
+   `WebViewCompat.addDocumentStartJavaScript` (androidx.webkit 1.12.1) con `onPageStarted` de
+   respaldo; la mini app con `window.ray.send` en un `<script>` inline ya llega
+   (`page-loaded:https://app.ray.invalid/index.html`).
+13. **Quitar la última dependencia deja `ray.lock` y `.ray-deps/` como estaban** (1.27.17): tras
+   borrar `[dependencies]` del `ray.toml`, `ray check`/`ray fetch`/`ray update` responden
+   «declares no dependencies» y no tocan el lock, y `ray remove web` se niega porque «is not
+   declared». Hubo que borrar `ray.lock` a mano. **Sigue en 1.27.17+dev.d06b288e** (proyecto
+   nuevo con `ray add net`, `[dependencies]` borrado a mano: `ray check` compila, `ray.lock` y
+   `.ray-deps/net` siguen, `ray remove net` se niega).
+14. **`ray bundle --ios --ios-target sim` conserva una librería de dispositivo que ya no encaja
+   con el shell regenerado** (1.27.17+dev.d06b288e): el shell nuevo llama a
+   `ray_ui_shell_capabilities` (M323), pero `libs/libray_app.a` se «preserva» del proyecto
+   anterior sin ese símbolo, y compilar para un iPhone desde Xcode falla con «Undefined symbol:
+   _ray_ui_shell_capabilities». Remedio: `make ios-lib` (o `ray bundle --ios` para ambos
+   destinos). Propuesta: que el bundle compruebe que la librería preservada exporta lo que el
+   shell generado necesita y avise (o la recompile) cuando no.
+15. **`ray bundle --ios` deja el icono fuera de la app** (1.27.17+dev): escribe
+   `Shell/Assets.xcassets/AppIcon.appiconset/icon_1024.png`, pero el `project.pbxproj` no
+   referencia el catálogo, no tiene fase de Resources y nada fija
+   `ASSETCATALOG_COMPILER_APPICON_NAME`, así que Xcode no lo compila (sin `Assets.car` ni
+   `CFBundleIcons`) y el iPhone muestra el icono genérico. Rodeo: `scripts/ios-icon.ray` añade
+   las tres cosas (idempotente; `make bundle-ios` lo reaplica y `make ios-icon` lo lanza a
+   mano), tanto sobre el `pbxproj` compacto que escribe el bundle como sobre el que Xcode
+   reescribe al abrirlo. Propuesta: que el bundle genere la fase de Resources con el catálogo y
+   el ajuste en `App.xcconfig`.
+16. **`llms.txt` y `ray doc args` no coinciden** (1.27.18+dev): `llms.txt` enseña
+   `args().slice(1, args().len())` como «`args()` sin el primer elemento» (el programa), pero
+   `args()` no incluye el programa («after the file path», `ray doc args`; comprobado con `ray
+   run f.ray -- hello` → `["hello"]`). Siguiendo `llms.txt`, `scripts/ios-icon.ray` perdía su
+   único argumento.
+17. **`ray dev --help` no imprime la ayuda: arranca `ray dev`** (1.27.18): trata `--help` como
+   el módulo a ejecutar («could not read module '--help'»), lanza el `[frontend] dev` si lo hay
+   y se queda esperando cambios. `ray bundle --help` sí muestra el uso.
+
+18. **No hay forma de que la app siga sonando en segundo plano** (1.27.18). Al cambiar de app el
+   ritmo se para, en iOS y en Android, por tres carencias que son del shell y del runtime, no de
+   la página:
+   - El shell iOS no configura `AVAudioSession` (queda la categoría «ambient»: se corta al
+     pasar a segundo plano y con el interruptor de silencio) ni declara
+     `UIBackgroundModes = ["audio"]`; `[app.plist]` solo admite cadenas y booleanos, no arrays, y
+     el `AppDelegate.m` se regenera entero con cada `ray bundle --ios`. El shell Android no
+     tiene *foreground service*: el WebView sigue mientras el sistema no mate el proceso.
+   - Aunque la sesión siguiera viva, WKWebView congela los timers de JavaScript en segundo
+     plano, y el secuenciador (Web Audio + `setInterval` con look-ahead) deja de encolar golpes.
+     Solo un elemento `<audio>` reproduciendo sigue en segundo plano; Web Audio puro, no.
+   - La salida es `std/audio` desde el programa raylang, que no depende del webview: la
+     librería compila con `audio` para iOS y Android (`ray build --native --lib` da
+     `process+audio+ui-shell`), y **en Android `audio.open(44100, 1)` funciona dentro del shell
+     (AAudio)**; pero en iOS responde «no backend for this platform (macOS/Linux/Android/
+     Windows)», y `ray bundle --ios`/`--android` excluyen `audio` y `process` de todas formas.
+   Opciones, de menor a mayor:
+   1. Parche del shell como el del icono (`scripts/ios-audio.ray`: sesión `playback` en el
+      `AppDelegate` y el modo de fondo en el plist) y, en la página, al recibir `lifecycle`
+      `background` renderizar el patrón con el mismo render offline del EXPORT WAV y
+      reproducirlo en bucle en un `<audio>`; al volver, resincronizar. Sin cambios en raylang;
+      los cambios hechos en otra app no suenan hasta volver.
+   2. **Audio en el programa raylang** (la opción de fondo): el secuenciador y la mezcla de
+      samples en una fibra con `std/audio` (`open_latency`, `write` con backpressure,
+      `played_ms` para el LED), la página solo como UI por el puente. Sin timers del webview,
+      el reloj es el del dispositivo de audio, y el mismo motor sirve en escritorio. Requiere de
+      raylang: (a) un backend iOS de `std/audio` (AudioQueue/AVAudioEngine; el de macOS es
+      AudioQueue), (b) que `ray bundle --ios/--android` no excluyan `audio`, (c) `[ios] audio =
+      "playback"` o `background_audio = true` que escriba la sesión y `UIBackgroundModes`, y en
+      Android un *foreground service* opcional (`[android] foreground_audio = true`), (d) que la
+      fibra de audio siga corriendo con la app en segundo plano (el runtime ya recibe
+      `lifecycle`). Ray808 la adoptaría en cuanto exista el backend iOS.
+   Propuesta: (a)–(d) del punto 2; (1) es el rodeo mientras tanto.
+
+Revisado con la release **1.27.18** (28 sep 2026, `ray version` sin `+dev`): 10, 13, 15, 16 y 17
+siguen igual (fmt saca el comentario del arreglo; `ray.lock` y `.ray-deps/` quedan tras quitar
+la última dependencia y `ray remove` se niega; el proyecto iOS generado no cablea el icono aunque
+`[app] icon` esté puesto; `llms.txt` sigue con `args().slice(1, args().len())`). 14 no se pudo
+repetir sin una librería de dispositivo antigua; `ray bundle --help` no menciona ninguna
+comprobación de la librería preservada.
 
 ## Créditos y licencia de los samples
 
