@@ -362,8 +362,10 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
    bundle ya no excluye `audio`, y `[ios] background_audio = true` / `[android] background_audio
    = true` dan la sesión `playback` con `UIBackgroundModes = audio` y el *foreground service*.
    Ray808 declara las dos claves; lo que falta es de la app: mover el secuenciador y la mezcla
-   a `std/audio` en el programa (hoy siguen en Web Audio, que se para con el webview). Sin
-   verificar en dispositivo real la continuidad del audio al pasar a segundo plano.
+   a `std/audio` en el programa (hoy siguen en Web Audio, que se para con el webview). La
+   continuidad del audio en segundo plano con `std/audio` está verificada en un iPhone real y
+   en el emulador Android con [RayPlay](https://github.com/ray-language/rayplay), la app hecha
+   para probarlo.
 
 Revisado con la release **1.27.18** (28 sep 2026): 10, 13, 15, 16 y 17 seguían igual; 14 no se
 pudo repetir sin una librería de dispositivo antigua. Revisado con **1.27.19** (29 sep 2026):
