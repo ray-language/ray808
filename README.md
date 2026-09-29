@@ -312,7 +312,7 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
    `Shell/Assets.xcassets/AppIcon.appiconset/icon_1024.png`, pero el `project.pbxproj` no
    referencia el catálogo, no tiene fase de Resources y nada fija
    `ASSETCATALOG_COMPILER_APPICON_NAME`, así que Xcode no lo compila (sin `Assets.car` ni
-   `CFBundleIcons`) y el iPhone muestra el icono genérico. Rodeo: `scripts/ios-icon.py` añade
+   `CFBundleIcons`) y el iPhone muestra el icono genérico. Rodeo: `scripts/ios-icon.ray` añade
    las tres cosas (idempotente; `make bundle-ios` lo reaplica y `make ios-icon` lo lanza a
    mano). Propuesta: que el bundle genere la fase de Resources con el catálogo y el ajuste en
    `App.xcconfig`.

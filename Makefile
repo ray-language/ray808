@@ -66,10 +66,10 @@ bundle-ios: ## (Re)generate the Xcode project in Ray808-ios/ — only when [app]
 	ray bundle --ios && \
 	if [ -d $$tmp/xcshareddata ]; then \
 		cp -R $$tmp/xcshareddata $(IOS)/$(APP).xcodeproj/ && echo "kept the shared Xcode scheme"; \
-	fi && python3 scripts/ios-icon.py $(IOS); status=$$?; rm -rf $$tmp; exit $$status
+	fi && ray run scripts/ios-icon.ray -- $(IOS); status=$$?; rm -rf $$tmp; exit $$status
 
 ios-icon: ## Wire the app icon into Ray808-ios (the generated project leaves it out)
-	python3 scripts/ios-icon.py $(IOS)
+	ray run scripts/ios-icon.ray -- $(IOS)
 
 ios-lib: ## Rebuild the iPhone static library (after UI or backend changes); Xcode project untouched
 	ray build --native --lib --release --target aarch64-apple-ios -o $(IOS)/libs/libray_app.a
