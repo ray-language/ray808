@@ -212,7 +212,9 @@ iOS el interruptor de silencio, que también silencia Web Audio.
   guardar; el selector de archivos para cargar sí funciona desde raylang 1.27.13).
 - **iOS: el interruptor de silencio silencia la app** (categoría de audio por defecto de
   WKWebView; cambiarla es trabajo del shell).
-- **El sonido se pausa al cambiar de app** (iOS y Android): ver el hallazgo 18.
+- **El sonido se pausa al cambiar de app** (iOS y Android): el ritmo suena en Web Audio, que el
+  webview congela. Es una decisión, no un pendiente: Ray808 se queda así; la alternativa (audio
+  desde el programa con `std/audio`) está demostrada en RayPlay. Ver el hallazgo 18.
 - Drag & drop de samples solo en escritorio.
 
 ## Hallazgos de dogfood
@@ -361,15 +363,18 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
    **Resuelto en raylang 1.27.19** (M324): `std/audio` suena por AudioQueue también en iOS, el
    bundle ya no excluye `audio`, y `[ios] background_audio = true` / `[android] background_audio
    = true` dan la sesión `playback` con `UIBackgroundModes = audio` y el *foreground service*.
-   Ray808 declara las dos claves; lo que falta es de la app: mover el secuenciador y la mezcla
-   a `std/audio` en el programa (hoy siguen en Web Audio, que se para con el webview). La
-   continuidad del audio en segundo plano con `std/audio` está verificada en un iPhone real y
+   Ray808 declara las dos claves, pero **se queda con Web Audio**: mover el secuenciador y la
+   mezcla a `std/audio` en el programa cambiaría el producto (solo samples WAV, o PCM decodificado
+   por la página; el EXPORT WAV de sitio) y no compensa para una app de dogfood del frontend.
+   La continuidad del audio en segundo plano con `std/audio` está verificada en un iPhone real y
    en el emulador Android con [RayPlay](https://github.com/ray-language/rayplay), la app hecha
-   para probarlo.
+   para probarlo. Nota: con `[android] background_audio = true` el shell Android pide el permiso
+   de notificaciones al arrancar aunque el programa nunca abra `std/audio` (RayPlay, hallazgo 1);
+   si molesta, basta quitar las dos claves de `ray.toml`.
 
 Revisado con la release **1.27.18** (28 sep 2026): 10, 13, 15, 16 y 17 seguían igual; 14 no se
 pudo repetir sin una librería de dispositivo antigua. Revisado con **1.27.19** (29 sep 2026):
-10, 13, 15, 16 y 17 resueltos y 18 resuelto en raylang (pendiente de adoptar en la app); 14
+10, 13, 15, 16 y 17 resueltos y 18 resuelto en raylang (Ray808 no lo adopta: decisión); 14
 sigue sin repetirse.
 
 ## Créditos y licencia de los samples
