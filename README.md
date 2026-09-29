@@ -316,6 +316,11 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
    las tres cosas (idempotente; `make bundle-ios` lo reaplica y `make ios-icon` lo lanza a
    mano). Propuesta: que el bundle genere la fase de Resources con el catálogo y el ajuste en
    `App.xcconfig`.
+16. **`llms.txt` y `ray doc args` no coinciden** (1.27.18+dev): `llms.txt` enseña
+   `args().slice(1, args().len())` como «`args()` sin el primer elemento» (el programa), pero
+   `args()` no incluye el programa («after the file path», `ray doc args`; comprobado con `ray
+   run f.ray -- hello` → `["hello"]`). Siguiendo `llms.txt`, `scripts/ios-icon.ray` perdía su
+   único argumento.
 
 ## Créditos y licencia de los samples
 
