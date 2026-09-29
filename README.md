@@ -314,8 +314,9 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
    `ASSETCATALOG_COMPILER_APPICON_NAME`, así que Xcode no lo compila (sin `Assets.car` ni
    `CFBundleIcons`) y el iPhone muestra el icono genérico. Rodeo: `scripts/ios-icon.ray` añade
    las tres cosas (idempotente; `make bundle-ios` lo reaplica y `make ios-icon` lo lanza a
-   mano). Propuesta: que el bundle genere la fase de Resources con el catálogo y el ajuste en
-   `App.xcconfig`.
+   mano), tanto sobre el `pbxproj` compacto que escribe el bundle como sobre el que Xcode
+   reescribe al abrirlo. Propuesta: que el bundle genere la fase de Resources con el catálogo y
+   el ajuste en `App.xcconfig`.
 16. **`llms.txt` y `ray doc args` no coinciden** (1.27.18+dev): `llms.txt` enseña
    `args().slice(1, args().len())` como «`args()` sin el primer elemento» (el programa), pero
    `args()` no incluye el programa («after the file path», `ray doc args`; comprobado con `ray

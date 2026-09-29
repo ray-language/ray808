@@ -26,41 +26,50 @@ fn find_pbxproj(root: string) -> Result<string, string> {
     Result.Err("no .xcodeproj under ${root}")
 }
 
-/// Replaces `anchor` once, or fails: a missing anchor means the generated layout changed.
-fn splice(text: string, anchor: string, replacement: string) -> Result<string, string> {
-    if (!text.contains(anchor)) {
-        return Result.Err("anchor not found in project.pbxproj: ${anchor}");
+/// Replaces the first of `anchors` that the text contains, or fails: the bundle writes a
+/// compact one-object-per-line project, and Xcode rewrites it in its sectioned layout the
+/// first time it opens it, so every edit has one anchor per layout.
+fn splice(text: string, anchors: [(string, string)]) -> Result<string, string> {
+    for a in anchors {
+        if (text.contains(a.0)) {
+            return Result.Ok(text.replace(a.0, a.1));
+        }
     }
-    Result.Ok(text.replace(anchor, replacement))
+    Result.Err("anchor not found in project.pbxproj: ${anchors[0].0}")
 }
 
+const FRAMEWORKS: string = "0000000000000000000000E1";
+
+const INFO_PLIST: string = "0000000000000000000000F4";
+
 fn wire_project(text: string) -> Result<string, string> {
-    var t = text;
+    // The three new objects, right after `objects = {` (the same in both layouts).
+    let objects = "\tobjects = {\n"
+        + "\t\t${FILE_REF} /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = \"<group>\"; };\n"
+        + "\t\t${BUILD_FILE} /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ${FILE_REF} /* Assets.xcassets */; };\n"
+        + "\t\t${PHASE} /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (${BUILD_FILE} /* Assets.xcassets in Resources */); runOnlyForDeploymentPostprocessing = 0; };\n";
+    var t = splice(text, [("\tobjects = {\n", objects)])?;
+    // The Resources phase after Frameworks in the target's buildPhases.
     t = splice(
         t,
-        "/* End PBXFileReference section */",
-        "\t\t${FILE_REF} /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = \"<group>\"; };\n/* End PBXFileReference section */"
+        [
+            ("${FRAMEWORKS})", "${FRAMEWORKS}, ${PHASE})"),
+            (
+                "\t\t\t\t${FRAMEWORKS} /* Frameworks */,\n",
+                "\t\t\t\t${FRAMEWORKS} /* Frameworks */,\n\t\t\t\t${PHASE} /* Resources */,\n"
+            )
+        ]
     )?;
+    // The catalog in the Shell group, after Info.plist.
     t = splice(
         t,
-        "/* End PBXBuildFile section */",
-        "\t\t${BUILD_FILE} /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ${FILE_REF} /* Assets.xcassets */; };\n/* End PBXBuildFile section */"
-    )?;
-    t = splice(
-        t,
-        "/* Begin PBXSourcesBuildPhase section */",
-        "/* Begin PBXResourcesBuildPhase section */\n\t\t${PHASE} /* Resources */ = {\n\t\t\tisa = PBXResourcesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t\t${BUILD_FILE} /* Assets.xcassets in Resources */,\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n/* End PBXResourcesBuildPhase section */\n\n/* Begin PBXSourcesBuildPhase section */"
-    )?;
-    // The Resources phase after Frameworks in the target, and the catalog in the Shell group.
-    t = splice(
-        t,
-        "\t\t\t\t0000000000000000000000E1 /* Frameworks */,\n",
-        "\t\t\t\t0000000000000000000000E1 /* Frameworks */,\n\t\t\t\t${PHASE} /* Resources */,\n"
-    )?;
-    t = splice(
-        t,
-        "\t\t\t\t0000000000000000000000F4 /* Info.plist */,\n\t\t\t);\n\t\t\tpath = Shell;",
-        "\t\t\t\t0000000000000000000000F4 /* Info.plist */,\n\t\t\t\t${FILE_REF} /* Assets.xcassets */,\n\t\t\t);\n\t\t\tpath = Shell;"
+        [
+            ("${INFO_PLIST}); path = Shell;", "${INFO_PLIST}, ${FILE_REF}); path = Shell;"),
+            (
+                "\t\t\t\t${INFO_PLIST} /* Info.plist */,\n\t\t\t);\n\t\t\tpath = Shell;",
+                "\t\t\t\t${INFO_PLIST} /* Info.plist */,\n\t\t\t\t${FILE_REF} /* Assets.xcassets */,\n\t\t\t);\n\t\t\tpath = Shell;"
+            )
+        ]
     )?;
     Result.Ok(t)
 }
