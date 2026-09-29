@@ -121,7 +121,7 @@ body:has(.machine--phone) {
 
 .machine--phone .brand {
   flex-wrap: nowrap;
-  padding: 12px 2px 8px;
+  padding: 12px 8px 8px;
   border-bottom-width: 1px;
 }
 .machine--phone .brand__left { gap: 8px; min-width: 0; }
@@ -185,6 +185,7 @@ body:has(.machine--phone) {
   padding-left: 10px;
   padding-right: 10px;
   scrollbar-width: none;
+  margin-inline: 0px;
 }
 .chips::-webkit-scrollbar { display: none; }
 .chip { flex: 0 0 auto; scroll-snap-align: start; }

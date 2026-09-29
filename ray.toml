@@ -1,12 +1,13 @@
 [package]
 name = "ray808"
 version = "0.1.0"
-# 1.27.18: `ui.mount_embed_at` (the Vite build at the root of ray://app) and the Android
-# shell's early `window.ray`. 1.27.17: the iOS/Android shells serve `ray://app`, so the page
+# 1.27.19: the generated iOS project carries the app icon, `[ios]`/`[android]`
+# background_audio and an iOS backend for std/audio. 1.27.18: `ui.mount_embed_at` (the Vite
+# build at the root of ray://app) and the Android shell's early `window.ray`. 1.27.17: the iOS/Android shells serve `ray://app`, so the page
 # needs no local server (frontend.ray) and the project has no Tier-2 dependencies. 1.27.13 brought
 # Option/Result equality in the tests, literal patterns in `match`, HOME on Android and the
 # Info.plist keys of `[app.plist]` in `ray bundle --ios`.
-raylang = "1.27.18"
+raylang = "1.27.19"
 
 # The web frontend (Vite + React). `ray dev` runs `dev` and points app:// at `url`;
 # `ray build --native` / `ray bundle` run `build` and embed `dist`.
@@ -27,3 +28,13 @@ copyright = "© 2026 Rayala · 808 samples by Michael Fischer (1994)"
 # local-network prompt is what lets the iPhone reach the Mac's Vite (`make dev-device`).
 [app.plist]
 NSLocalNetworkUsageDescription = "Ray808 connects to the Vite dev server on your computer while you develop the app (hot reload)."
+
+# Keep std/audio playing when the app goes to the background (raylang 1.27.19, M324): the
+# iOS shell takes the `playback` audio session and `UIBackgroundModes = audio`; Android runs
+# the program under a foreground service. Only sound produced by the raylang program benefits:
+# the page's Web Audio still stops with the webview.
+[ios]
+background_audio = true
+
+[android]
+background_audio = true
