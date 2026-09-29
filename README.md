@@ -322,6 +322,16 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
    `args()` no incluye el programa («after the file path», `ray doc args`; comprobado con `ray
    run f.ray -- hello` → `["hello"]`). Siguiendo `llms.txt`, `scripts/ios-icon.ray` perdía su
    único argumento.
+17. **`ray dev --help` no imprime la ayuda: arranca `ray dev`** (1.27.18): trata `--help` como
+   el módulo a ejecutar («could not read module '--help'»), lanza el `[frontend] dev` si lo hay
+   y se queda esperando cambios. `ray bundle --help` sí muestra el uso.
+
+Revisado con la release **1.27.18** (28 sep 2026, `ray version` sin `+dev`): 10, 13, 15, 16 y 17
+siguen igual (fmt saca el comentario del arreglo; `ray.lock` y `.ray-deps/` quedan tras quitar
+la última dependencia y `ray remove` se niega; el proyecto iOS generado no cablea el icono aunque
+`[app] icon` esté puesto; `llms.txt` sigue con `args().slice(1, args().len())`). 14 no se pudo
+repetir sin una librería de dispositivo antigua; `ray bundle --help` no menciona ninguna
+comprobación de la librería preservada.
 
 ## Créditos y licencia de los samples
 
