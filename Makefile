@@ -14,7 +14,7 @@ SHARED  := $(IOS)/$(APP).xcodeproj/xcshareddata
 
 .DEFAULT_GOAL := help
 .PHONY: help install dev dev-device test test-backend lint build smoke icon \
-        bundle-macos bundle-ios ios-lib ios-lib-sim ios-libs ios-sim-build \
+        bundle-macos bundle-ios ios-icon ios-lib ios-lib-sim ios-libs ios-sim-build \
         bundle-android android-apk
 
 help: ## List the targets
@@ -66,7 +66,10 @@ bundle-ios: ## (Re)generate the Xcode project in Ray808-ios/ — only when [app]
 	ray bundle --ios && \
 	if [ -d $$tmp/xcshareddata ]; then \
 		cp -R $$tmp/xcshareddata $(IOS)/$(APP).xcodeproj/ && echo "kept the shared Xcode scheme"; \
-	fi; status=$$?; rm -rf $$tmp; exit $$status
+	fi && python3 scripts/ios-icon.py $(IOS); status=$$?; rm -rf $$tmp; exit $$status
+
+ios-icon: ## Wire the app icon into Ray808-ios (the generated project leaves it out)
+	python3 scripts/ios-icon.py $(IOS)
 
 ios-lib: ## Rebuild the iPhone static library (after UI or backend changes); Xcode project untouched
 	ray build --native --lib --release --target aarch64-apple-ios -o $(IOS)/libs/libray_app.a
