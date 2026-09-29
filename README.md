@@ -213,6 +213,7 @@ iOS el interruptor de silencio, que también silencia Web Audio.
   guardar; el selector de archivos para cargar sí funciona desde raylang 1.27.13).
 - **iOS: el interruptor de silencio silencia la app** (categoría de audio por defecto de
   WKWebView; cambiarla es trabajo del shell).
+- **El sonido se pausa al cambiar de app** (iOS y Android): ver el hallazgo 18.
 - Drag & drop de samples solo en escritorio.
 
 ## Hallazgos de dogfood
@@ -325,6 +326,40 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
 17. **`ray dev --help` no imprime la ayuda: arranca `ray dev`** (1.27.18): trata `--help` como
    el módulo a ejecutar («could not read module '--help'»), lanza el `[frontend] dev` si lo hay
    y se queda esperando cambios. `ray bundle --help` sí muestra el uso.
+
+18. **No hay forma de que la app siga sonando en segundo plano** (1.27.18). Al cambiar de app el
+   ritmo se para, en iOS y en Android, por tres carencias que son del shell y del runtime, no de
+   la página:
+   - El shell iOS no configura `AVAudioSession` (queda la categoría «ambient»: se corta al
+     pasar a segundo plano y con el interruptor de silencio) ni declara
+     `UIBackgroundModes = ["audio"]`; `[app.plist]` solo admite cadenas y booleanos, no arrays, y
+     el `AppDelegate.m` se regenera entero con cada `ray bundle --ios`. El shell Android no
+     tiene *foreground service*: el WebView sigue mientras el sistema no mate el proceso.
+   - Aunque la sesión siguiera viva, WKWebView congela los timers de JavaScript en segundo
+     plano, y el secuenciador (Web Audio + `setInterval` con look-ahead) deja de encolar golpes.
+     Solo un elemento `<audio>` reproduciendo sigue en segundo plano; Web Audio puro, no.
+   - La salida es `std/audio` desde el programa raylang, que no depende del webview: la
+     librería compila con `audio` para iOS y Android (`ray build --native --lib` da
+     `process+audio+ui-shell`), y **en Android `audio.open(44100, 1)` funciona dentro del shell
+     (AAudio)**; pero en iOS responde «no backend for this platform (macOS/Linux/Android/
+     Windows)», y `ray bundle --ios`/`--android` excluyen `audio` y `process` de todas formas.
+   Opciones, de menor a mayor:
+   1. Parche del shell como el del icono (`scripts/ios-audio.ray`: sesión `playback` en el
+      `AppDelegate` y el modo de fondo en el plist) y, en la página, al recibir `lifecycle`
+      `background` renderizar el patrón con el mismo render offline del EXPORT WAV y
+      reproducirlo en bucle en un `<audio>`; al volver, resincronizar. Sin cambios en raylang;
+      los cambios hechos en otra app no suenan hasta volver.
+   2. **Audio en el programa raylang** (la opción de fondo): el secuenciador y la mezcla de
+      samples en una fibra con `std/audio` (`open_latency`, `write` con backpressure,
+      `played_ms` para el LED), la página solo como UI por el puente. Sin timers del webview,
+      el reloj es el del dispositivo de audio, y el mismo motor sirve en escritorio. Requiere de
+      raylang: (a) un backend iOS de `std/audio` (AudioQueue/AVAudioEngine; el de macOS es
+      AudioQueue), (b) que `ray bundle --ios/--android` no excluyan `audio`, (c) `[ios] audio =
+      "playback"` o `background_audio = true` que escriba la sesión y `UIBackgroundModes`, y en
+      Android un *foreground service* opcional (`[android] foreground_audio = true`), (d) que la
+      fibra de audio siga corriendo con la app en segundo plano (el runtime ya recibe
+      `lifecycle`). Ray808 la adoptaría en cuanto exista el backend iOS.
+   Propuesta: (a)–(d) del punto 2; (1) es el rodeo mientras tanto.
 
 Revisado con la release **1.27.18** (28 sep 2026, `ray version` sin `+dev`): 10, 13, 15, 16 y 17
 siguen igual (fmt saca el comentario del arreglo; `ray.lock` y `.ray-deps/` quedan tras quitar
