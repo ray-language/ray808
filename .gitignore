@@ -7,6 +7,10 @@ frontend/dist/
 /Ray808.app/
 /Ray808-ios/
 /Ray808-android/
+/Ray808-dev-ios/
+/Ray808-dev-android/
+# the pairing link of `ray dev --device` (port + token)
+.ray-dev
 # smoke test screenshots
 frontend/smoke-out/
 .DS_Store

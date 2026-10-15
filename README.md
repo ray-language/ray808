@@ -140,8 +140,7 @@ blanco.
 El aviso de red local sale del `NSLocalNetworkUsageDescription` que declara `[app.plist]` en el
 `ray.toml`: desde raylang 1.27.13 `ray bundle --ios` lo escribe en `Ray808-ios/Shell/Info.plist`
 (antes había que añadirlo a mano con `plutil`). Sin la variable (o desactivada) se comporta como
-siempre. El hot reload cubre el frontend; un cambio en `src/*.ray` sigue pidiendo recompilar la
-librería (abajo) e instalar de nuevo.
+siempre. El hot reload de arriba cubre el frontend; para el programa raylang, ver la sección siguiente.
 
 `ray bundle --ios` reescribe `Ray808.xcodeproj` entero, **incluido el esquema compartido** donde
 vive `RAY808_DEV_URL`: `make bundle-ios` guarda `xcshareddata/` antes y lo repone después.
@@ -155,6 +154,22 @@ apagado). Ray808 se queda con `RAY808_DEV_URL` porque raylang decide una sola ve
 primera vez que iOS pide el permiso de red local (y esas conexiones fallan) se quedaría en la
 build embebida, mientras que la página de Ray808 sigue llamando al dev server y
 salta a él en cuanto responde; además funciona con la librería `--release` de siempre.
+
+## Hot reload del programa raylang en el teléfono
+
+Desde raylang 1.27.25 (M330) también se recarga `src/*.ray`, sin recompilar la librería ni
+reinstalar: una **shell de desarrollo** (`org.raylang.ray808.dev`, con la VM de raylang dentro)
+recibe el programa del Mac por Wi-Fi y lo reinicia en cada guardado.
+
+```bash
+make bundle-ios-dev   # ray bundle --ios --dev → Ray808-dev-ios/ (instálala una vez desde Xcode)
+make dev-program      # ray dev --device: imprime el QR y el enlace; escanéalo con la cámara
+```
+
+Lo que imprime el programa sale en la terminal del Mac. Verificado con raylang 1.27.55 en el
+simulador (el enlace se abre con `xcrun simctl openurl <udid> <enlace>`): al guardar un `.ray`
+el programa se reinicia en ~1 s y la página se recarga con él. `ray dev --device` guarda el
+emparejamiento en `.ray-dev` (fuera de git). Android: `ray bundle --android --dev`.
 
 ## Empaquetar
 
@@ -200,7 +215,7 @@ xcconfig (el Team ID no va al `ray.toml` de un repo público). El icono sale de
 | Frontend | `npm run build` (TypeScript estricto) + `npm run smoke`: 20 comprobaciones en Chrome headless, escritorio 1440×960 y teléfono 390×844 táctil (carga de los 116 samples, LED corredizo, knobs, pasos, patrones, guardado por el puente, sin scroll lateral, hoja de acciones, banco de sonidos, diálogo de RESET) |
 | Programa completo | `ray run` headless (`RAY_UI_TRACE=1`): monta `frontend/dist` y abre `ray://app/index.html`; bajo `ray dev`, la URL de Vite |
 | macOS | `ray bundle` → `Ray808.app` (16 MB) sirviendo los assets embebidos con `cwd=/` |
-| iOS | simulador iPhone 16 Pro: arranca, carga los samples y responde por el puente en < 3 s (un `state.json` sembrado aparece en el display); con raylang 1.27.13 también con `RAY_DEV_FRONTEND_URL`, con Vite encendido y apagado. Con raylang 1.27.17 (proyecto regenerado con `ray bundle --ios --ios-target sim`): la página llega por `ray://app/index.html`, sin servidor local; el esquema compartido, la firma y la librería de dispositivo sobreviven a la regeneración. Con 1.27.19 (`ray bundle --ios`, ambos destinos): el icono va cableado de fábrica (`Assets.car`), el shell fija la sesión de audio `playback` y `UIBackgroundModes = audio`, y `std/audio` abre el dispositivo dentro del shell (mini app) |
+| iOS | simulador iPhone 16 Pro: arranca, carga los samples y responde por el puente en < 3 s (un `state.json` sembrado aparece en el display); con raylang 1.27.13 también con `RAY_DEV_FRONTEND_URL`, con Vite encendido y apagado. Con raylang 1.27.17 (proyecto regenerado con `ray bundle --ios --ios-target sim`): la página llega por `ray://app/index.html`, sin servidor local; el esquema compartido, la firma y la librería de dispositivo sobreviven a la regeneración. Con 1.27.19 (`ray bundle --ios`, ambos destinos): el icono va cableado de fábrica (`Assets.car`), el shell fija la sesión de audio `playback` y `UIBackgroundModes = audio`, y `std/audio` abre el dispositivo dentro del shell (mini app). Con 1.27.55 (`make bundle-ios`): arranca y el puente responde (un `state.json` sembrado aparece en el display); la shell de desarrollo (`ray bundle --ios --dev` + `ray dev --device`) corre Ray808 y lo recarga al guardar un `.ray` |
 | Android | emulador arm64: arranca, y un paso tocado con `adb` queda en `state.json` del backend y sobrevive al reinicio; con raylang 1.27.13 el estado vive bajo el `HOME` que fija el shell, y CARGAR JSON abre el selector de archivos del sistema e importa el archivo elegido. Con raylang 1.27.17 (proyecto regenerado con `ray bundle --android`): la página llega por el alias `https://app.ray.invalid/index.html`, y un toque en un paso reescribe `state.json` por el puente. Con 1.27.19 (`[android] background_audio`): el manifiesto declara el *foreground service* `mediaPlayback` |
 
 Sin verificar en dispositivo real: el sonido en sí (los emuladores no se escucharon), y en
@@ -375,7 +390,9 @@ de iPhone 16 Pro y en el emulador Android arm64; el `ray` del host se identifica
 Revisado con la release **1.27.18** (28 sep 2026): 10, 13, 15, 16 y 17 seguían igual; 14 no se
 pudo repetir sin una librería de dispositivo antigua. Revisado con **1.27.19** (29 sep 2026):
 10, 13, 15, 16 y 17 resueltos y 18 resuelto en raylang (Ray808 no lo adopta: decisión); 14
-sigue sin repetirse.
+sigue sin repetirse. Revisado con **1.27.55** (14 oct 2026): tests, smoke, `ray run` y el
+proyecto iOS regenerado siguen bien, y el hot reload del programa en el teléfono (hallazgo
+#106 del registro de ray-apps) queda verificado con la shell de desarrollo.
 
 ## Créditos y licencia de los samples
 

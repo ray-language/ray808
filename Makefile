@@ -13,8 +13,8 @@ NPM     := npm --prefix frontend
 SHARED  := $(IOS)/$(APP).xcodeproj/xcshareddata
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev dev-device test test-backend lint build smoke icon \
-        bundle-macos bundle-ios ios-lib ios-lib-sim ios-libs ios-sim-build \
+.PHONY: help install dev dev-device dev-program test test-backend lint build smoke icon \
+        bundle-macos bundle-ios bundle-ios-dev ios-lib ios-lib-sim ios-libs ios-sim-build \
         bundle-android android-apk
 
 help: ## List the targets
@@ -31,6 +31,9 @@ dev: ## Desktop window over the Vite dev server (hot reload of page and program)
 dev-device: ## Vite on the LAN for hot reload on a phone (enable RAY808_DEV_URL in the Xcode scheme)
 	@echo "Enable RAY808_DEV_URL=http://$$(ipconfig getifaddr en0 2>/dev/null || hostname):5173 in the Xcode scheme, then Run."
 	$(NPM) run dev:device
+
+dev-program: ## Push src/*.ray to the paired development shell on every save (prints the pairing QR)
+	ray dev --device
 
 # ---- Checks ----
 
@@ -70,6 +73,9 @@ bundle-ios: ## (Re)generate the Xcode project in Ray808-ios/ — only when [app]
 
 ios-lib: ## Rebuild the iPhone static library (after UI or backend changes); Xcode project untouched
 	ray build --native --lib --release --target aarch64-apple-ios -o $(IOS)/libs/libray_app.a
+
+bundle-ios-dev: ## Generate the development shell (Ray808-dev-ios/): the program reloads on the phone on every save
+	ray bundle --ios --dev
 
 ios-lib-sim: ## Rebuild the simulator static library
 	ray build --native --lib --release --target aarch64-apple-ios-sim -o $(IOS)/libs-sim/libray_app.a
